@@ -1,6 +1,6 @@
 data:
   h5_path: "data/qg_medium_train.h5"
-  batch_size: 64
+  batch_size: 32
   num_workers: 4
 
 model:
