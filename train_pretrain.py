@@ -15,7 +15,7 @@ cfg = load_config("colab_config.yaml")
 
 # 2. INITIALIZE LOGGING
 # Generate a unique run ID based on time
-timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 run_name = f"{cfg['model']['name']}_{timestamp}"
 
 # Create unique subdirectories in Drive
