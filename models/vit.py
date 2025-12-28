@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import math
 import numpy as np
+from torch.nn.utils.rnn import pad_sequence
 
 def trunc_normal_(tensor, std=0.02, a=-2.0, b=2.0):
     """ Fills the input Tensor with values drawn from a truncated normal distribution. """
@@ -131,14 +132,26 @@ class VisionTransformer(nn.Module):
             block.mlp.fc2.weight.data.div_(math.sqrt(2.0 * (i + 1)))
     # FIX 3: Mask-Aware Forward Pass
     def forward(self, x_patches, mask=None):
-        x = self.patch_embed(x_patches)
+        B, N, D = x_patches.shape
+
+        # 1. Project patches to embedding dimension
+        x = self.patch_embed(x_patches) # [B, N, embed_dim]
+
+        # 2. Add Positional Embeddings BEFORE masking
+        # This ensures the model knows WHERE the context patches came from
         x = x + self.pos_embed
 
         if mask is not None:
-            # mask is [B, 256] boolean. Extracts only context tokens.
-            B, _, D = x.shape
-            x = x[mask].view(B, -1, D)
-
+            # 3. Extract active patches for each item in the batch
+            # List of tensors: [(num_patches_i, D), (num_patches_j, D), ...]
+            x_masked = [x[i, mask[i]] for i in range(B)] 
+            
+            # 4. Pad sequences to the max length in the current batch
+            # This is what specifically fixes your "invalid shape" RuntimeError
+            x = pad_sequence(x_masked, batch_first=True) 
+        
+        # 5. Process through Transformer blocks
         for block in self.blocks:
             x = block(x)
+            
         return self.norm(x)
