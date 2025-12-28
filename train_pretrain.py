@@ -1,6 +1,8 @@
 import torch
 import torch.optim as optim
-from utils.data import QG_Dataset
+import os
+import datetime
+from data import QG_Dataset
 from utils.misc import generate_patches, load_config
 from utils.masking import BlockMaskGenerator
 from utils.optim import adjust_learning_rate
@@ -12,7 +14,19 @@ from models import IJEPA, VisionTransformer, MaskPredictor
 cfg = load_config("colab_config.yaml")
 
 # 2. INITIALIZE LOGGING
-logger = setup_logger(log_dir=cfg['train']['log_dir'], model_name=cfg['model']['name'])
+# Generate a unique run ID based on time
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+run_name = f"{cfg['model']['name']}_{timestamp}"
+
+# Create unique subdirectories in Drive
+checkpoint_dir = os.path.join(cfg['train']['checkpoint_dir'], run_name)
+log_dir = os.path.join(cfg['train']['log_dir'], run_name)
+
+os.makedirs(checkpoint_dir, exist_ok=True)
+os.makedirs(log_dir, exist_ok=True)
+
+# Update the logger and save_checkpoint calls to use these paths
+logger = setup_logger(log_dir=log_dir, model_name=cfg['model']['name'])
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # 3. SETUP DATA

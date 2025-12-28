@@ -127,8 +127,8 @@ class VisionTransformer(nn.Module):
         """ Rescales weights based on layer depth to prevent gradient explosion """
         for i, block in enumerate(self.blocks):
             # Scale attention projection and MLP second layer
-            nn.init.div_(block.attn.proj.weight.data, math.sqrt(2.0 * (i + 1)))
-            nn.init.div_(block.mlp[2].weight.data, math.sqrt(2.0 * (i + 1)))
+            block.attn.proj.weight.data.div_(math.sqrt(2.0 * (i + 1)))
+            block.mlp[2].weight.data.div_(math.sqrt(2.0 * (i + 1)))
 
     # FIX 3: Mask-Aware Forward Pass
     def forward(self, x_patches, mask=None):
