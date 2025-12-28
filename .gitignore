@@ -1,0 +1,22 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Data files (IMPORTANT: Do not push 170GB to Git)
+*.h5
+*.hdf5
+data/
+*.usb
+
+# Training artifacts
+checkpoints/
+logs/
+*.pth
+*.log
+
+# Environment/OS files
+.DS_Store
+.venv/
+env/
+.env

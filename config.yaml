@@ -1,0 +1,29 @@
+data:
+  h5_path: "data/qg_medium_train.h5"
+  batch_size: 64
+  num_workers: 4
+
+model:
+  name: "vit_small" # Used for logging/checkpoint names
+  patch_dim: 192
+  embed_dim: 384
+  depth: 12
+  num_heads: 6
+  predictor_embed_dim: 192
+  predictor_depth: 6
+
+train:
+  base_lr: 0.0001
+  epochs: 100
+  warmup_epochs: 10
+  ema_momentum: 0.999
+  weight_decay: 0.05
+  save_freq: 5
+  checkpoint_dir: "checkpoints"
+  log_dir: "logs"
+
+masking:
+  grid_size: 16
+  num_targets: 4
+  target_size: [3, 5]
+  context_size: [8, 12]

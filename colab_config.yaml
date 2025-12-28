@@ -1,0 +1,31 @@
+# config_colab.yaml
+data:
+  h5_path: "/content/qg.h5"         # Point to the FAST local Colab disk
+  batch_size: 256                  # Increased for L4/T4 GPUs
+  num_workers: 4                   # Parallel data loading
+
+model:
+  name: "vit_small_ijepa"
+  patch_dim: 192
+  embed_dim: 384
+  depth: 12
+  num_heads: 6
+  predictor_embed_dim: 192
+  predictor_depth: 6
+
+train:
+  base_lr: 0.0001
+  epochs: 100
+  warmup_epochs: 10
+  ema_momentum: 0.999
+  weight_decay: 0.05
+  save_freq: 5
+  # Paths in Drive for persistent storage
+  checkpoint_dir: "/content/drive/MyDrive/QG_IJEPA/checkpoints"
+  log_dir: "/content/drive/MyDrive/QG_IJEPA/logs"
+
+masking:
+  grid_size: 16
+  num_targets: 4
+  target_size: [3, 5]
+  context_size: [8, 12]
