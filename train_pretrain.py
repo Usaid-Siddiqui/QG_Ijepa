@@ -2,7 +2,7 @@ import torch
 import torch.optim as optim
 import os
 import datetime
-from data import QG_Dataset
+from utils.data import QG_Dataset
 from utils.misc import generate_patches, load_config
 from utils.masking import BlockMaskGenerator
 from utils.optim import adjust_learning_rate
