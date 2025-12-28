@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy
-from vit import Block, get_2d_sincos_pos_embed
+from models.vit import Block, get_2d_sincos_pos_embed
 
 class MaskPredictor(nn.Module):
     def __init__(self, encoder_dim=384, predictor_dim=192, depth=6, num_heads=6):
