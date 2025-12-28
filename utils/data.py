@@ -21,6 +21,7 @@ class QG_Dataset(Dataset):
         return len(self.indices)
     
     def __getitem__(self, idx):
+        print(f"Fetching index {idx}")
         i = self.indices[idx]
         
         # Load as numpy first, then convert to tensor
