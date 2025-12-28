@@ -7,22 +7,26 @@ from models.vit import Block, get_2d_sincos_pos_embed
 class MaskPredictor(nn.Module):
     def __init__(self, encoder_dim=384, predictor_dim=192, depth=6, num_heads=6):
         super().__init__()
+        # Projects Encoder dimension (384) to Predictor dimension (192)
         self.predictor_embed = nn.Linear(encoder_dim, predictor_dim)
         self.predictor_norm = nn.LayerNorm(predictor_dim)
         self.mask_token = nn.Parameter(torch.zeros(1, 1, predictor_dim))
         
-        # Fixed spatial awareness for the predictor
         self.pos_embed = nn.Parameter(torch.zeros(1, 256, predictor_dim), requires_grad=False)
         self.pos_embed.data.copy_(get_2d_sincos_pos_embed(predictor_dim, 16))
         
+        # Use a consistent name: self.blocks
         self.blocks = nn.ModuleList([Block(predictor_dim, num_heads) for _ in range(depth)])
+        
+        # Projects back to encoder_dim (384) for the loss calculation against the Teacher
         self.predictor_proj = nn.Linear(predictor_dim, encoder_dim)
         
         nn.init.trunc_normal_(self.mask_token, std=0.02)
 
     def forward(self, context_latents, target_mask):
         B = context_latents.shape[0]
-    
+
+        context_latents = self.predictor_embed(context_latents)
         # 1. Handle non-uniform target positional embeddings
         # self.pos_embed is [1, 256, D]. Expand it to batch size.
         full_pos = self.pos_embed.expand(B, -1, -1)
@@ -46,12 +50,12 @@ class MaskPredictor(nn.Module):
         x = torch.cat([context_latents, target_tokens], dim=1)
         
         # 5. Process through Predictor Transformer blocks
-        for block in self.predictor_blocks:
+        for block in self.blocks:
             x = block(x)
         
         x = self.predictor_norm(x)
         
         # 6. Extract only the target predictions (the last 'num_target_patches' tokens)
         preds = x[:, context_latents.shape[1]:]
-        
+        preds = self.predictor_proj(preds)
         return preds
