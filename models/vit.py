@@ -128,8 +128,7 @@ class VisionTransformer(nn.Module):
         for i, block in enumerate(self.blocks):
             # Scale attention projection and MLP second layer
             block.attn.proj.weight.data.div_(math.sqrt(2.0 * (i + 1)))
-            block.mlp[2].weight.data.div_(math.sqrt(2.0 * (i + 1)))
-
+            block.mlp.fc2.weight.data.div_(math.sqrt(2.0 * (i + 1)))
     # FIX 3: Mask-Aware Forward Pass
     def forward(self, x_patches, mask=None):
         x = self.patch_embed(x_patches)

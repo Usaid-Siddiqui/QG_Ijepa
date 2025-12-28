@@ -2,7 +2,7 @@
 data:
   h5_path: "/content/qg.h5"         # Point to the FAST local Colab disk
   batch_size: 256                  # Increased for L4/T4 GPUs
-  num_workers: 4                   # Parallel data loading
+  num_workers: 2                   # Parallel data loading
 
 model:
   name: "vit_small_ijepa"
