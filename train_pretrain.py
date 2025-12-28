@@ -8,7 +8,9 @@ from utils.masking import BlockMaskGenerator
 from utils.optim import adjust_learning_rate
 from utils.logging import setup_logger
 from utils.checkpointing import save_checkpoint, load_checkpoint
+from utils.metrics import masked_mse_loss
 from models import IJEPA, VisionTransformer, MaskPredictor
+from torch.nn.utils.rnn import pad_sequence
 
 # 1. LOAD CONFIGURATION
 cfg = load_config("colab_config.yaml")
@@ -87,18 +89,22 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
         c_mask, t_mask = masker.generate_batch_masks(images.size(0), device)
         
         with torch.no_grad():
-            target_latents = model.target_encoder(patches) 
+            full_target_latents = model.target_encoder(patches) 
+            
+            # 2. Extract only target patches and PAD them to match 'preds'
+            from torch.nn.utils.rnn import pad_sequence
+            target_list = [full_target_latents[i, t_mask[i]] for i in range(images.size(0))]
+            target_latents = pad_sequence(target_list, batch_first=True)
         
         context_latents = model.context_encoder(patches, c_mask)
         preds = model.predictor(context_latents, t_mask)
         
-        loss = torch.nn.functional.mse_loss(preds, target_latents[t_mask])
-        
+        loss = masked_mse_loss(preds, target_latents, t_mask)        
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
         model.update_target_encoder()
-        
         epoch_loss += loss.item()
 
     avg_loss = epoch_loss / len(dataloader)
@@ -115,4 +121,4 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
             'encoder_state_dict': model.context_encoder.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'best_loss': best_loss,
-        }, is_best, checkpoint_dir=cfg['train']['checkpoint_dir'])
+        }, is_best, checkpoint_dir=checkpoint_dir)

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import numpy
+from torch.nn.utils.rnn import pad_sequence
 from models.vit import Block, get_2d_sincos_pos_embed
 
 class MaskPredictor(nn.Module):
@@ -21,18 +22,36 @@ class MaskPredictor(nn.Module):
 
     def forward(self, context_latents, target_mask):
         B = context_latents.shape[0]
-        x_context = self.predictor_embed(context_latents)
+    
+        # 1. Handle non-uniform target positional embeddings
+        # self.pos_embed is [1, 256, D]. Expand it to batch size.
+        full_pos = self.pos_embed.expand(B, -1, -1)
         
-        # Identify target positions in the 2D grid
-        num_target = target_mask[0].sum().item()
-        pos_target = self.pos_embed.expand(B, -1, -1)[target_mask].view(B, num_target, -1)
+        # Extract target positions for each image separately to handle varying counts
+        pos_target_list = [full_pos[i, target_mask[i]] for i in range(B)]
         
-        # Initialize mask tokens with spatial location
-        x_target = self.mask_token.expand(B, num_target, -1) + pos_target
+        # Pad them so they form a valid batch tensor
+        pos_target = pad_sequence(pos_target_list, batch_first=True) # [B, max_target_patches, D]
         
-        x = torch.cat([x_context, x_target], dim=1)
-        for block in self.blocks:
+        # 2. Prepare mask tokens
+        # self.mask_token is [1, 1, D]
+        num_target_patches = pos_target.shape[1]
+        mask_tokens = self.mask_token.expand(B, num_target_patches, -1)
+        
+        # 3. Combine mask tokens with their spatial positions
+        target_tokens = mask_tokens + pos_target
+        
+        # 4. Concatenate context and target tokens
+        # context_latents is already padded from the Encoder
+        x = torch.cat([context_latents, target_tokens], dim=1)
+        
+        # 5. Process through Predictor Transformer blocks
+        for block in self.predictor_blocks:
             x = block(x)
         
-        # Predict only the target tokens
-        return self.predictor_proj(self.predictor_norm(x)[:, -num_target:])
+        x = self.predictor_norm(x)
+        
+        # 6. Extract only the target predictions (the last 'num_target_patches' tokens)
+        preds = x[:, context_latents.shape[1]:]
+        
+        return preds
