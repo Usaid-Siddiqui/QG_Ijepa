@@ -33,6 +33,7 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # 3. SETUP DATA
 dataset = QG_Dataset(cfg['data']['h5_path'])
+print(f"--- Dataset Loaded (Size: {len(dataset)}) ---")
 dataloader = torch.utils.data.DataLoader(
     dataset, 
     batch_size=cfg['data']['batch_size'], 
@@ -72,7 +73,9 @@ checkpoint_path = f"{cfg['train']['checkpoint_dir']}/latest_checkpoint.pth"
 start_epoch, best_loss = load_checkpoint(checkpoint_path, model, optimizer, device)
 
 # 7. TRAINING LOOP
+print("--- Starting Training Loop ---")
 for epoch in range(start_epoch, cfg['train']['epochs']):
+    print("--- Successfully loaded first batch ---")
     current_lr = adjust_learning_rate(
         optimizer, epoch, 
         cfg['train']['warmup_epochs'], 
