@@ -87,10 +87,14 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
     model.train()
     
     for images, _ in dataloader:
+        print("--- 1. Batch loaded from Disk ---")
         images = images.to(device)
         patches = generate_patches(images) 
+
+        print("--- 2. Generating Masks ---")
         c_mask, t_mask = masker.generate_batch_masks(images.size(0), device)
         
+        print("--- 3. Starting Forward Pass ---")
         with torch.no_grad():
             full_target_latents = model.target_encoder(patches) 
             
@@ -99,6 +103,7 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
             target_list = [full_target_latents[i, t_mask[i]] for i in range(images.size(0))]
             target_latents = pad_sequence(target_list, batch_first=True)
         
+        print("--- 4. Forward Pass Complete ---")
         context_latents = model.context_encoder(patches, c_mask)
         preds = model.predictor(context_latents, t_mask)
         
