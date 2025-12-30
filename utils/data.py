@@ -22,7 +22,7 @@ class QG_Dataset(Dataset):
     
     def __getitem__(self, idx):
         i = self.indices[idx]
-        
+        print(f"Loading item {i} from dataset...")
         # Load as numpy first, then convert to tensor
         img = self.data[i] 
         

@@ -88,6 +88,7 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
     model.train()
     
     for images, _ in dataloader:
+        print("Processing batch in dataloader...")
         images = images.to(device, non_blocking=True)
         optimizer.zero_grad()
 
