@@ -2,33 +2,24 @@ import torch
 import torch.optim as optim
 import os
 import datetime
-from utils import QG_Dataset, generate_patches, load_config, BlockMaskGenerator, adjust_learning_rate, setup_logger, save_checkpoint, load_checkpoint, masked_mse_loss
+from utils import QG_Dataset, generate_patches, load_config, adjust_learning_rate, setup_logger, save_checkpoint, load_checkpoint, masked_mse_loss, init_experiment, QG_MaskCollator
 from models import IJEPA, VisionTransformer, MaskPredictor
 from torch.nn.utils.rnn import pad_sequence
 from torch.amp import autocast, GradScaler # Updated import
+import torch.nn.functional as F
 
 # Initialize Scaler with the new non-deprecated syntax
 scaler = GradScaler('cuda')
 
-# 1. LOAD CONFIGURATION
+# LOAD CONFIGURATION
 cfg = load_config("colab_config.yaml")
 
-# 2. INITIALIZE LOGGING
-timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-run_name = f"{cfg['model']['name']}_{timestamp}"
+# INITIALIZE LOGGING
+logger, checkpoint_dir, device = init_experiment(cfg)
 
-checkpoint_dir = os.path.join(cfg['train']['checkpoint_dir'], run_name)
-log_dir = os.path.join(cfg['train']['log_dir'], run_name)
-
-os.makedirs(checkpoint_dir, exist_ok=True)
-os.makedirs(log_dir, exist_ok=True)
-
-logger = setup_logger(log_dir=log_dir, model_name=cfg['model']['name'])
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-# 3. SETUP DATA
+# SETUP DATA
 dataset = QG_Dataset(cfg['data']['h5_path'])
-print(f"--- Dataset Loaded (Size: {len(dataset)}) ---")
+logger.info(f"--- Dataset Loaded (Size: {len(dataset)}) ---")
 dataloader = torch.utils.data.DataLoader(
     dataset, 
     batch_size=cfg['data']['batch_size'], 
@@ -37,7 +28,7 @@ dataloader = torch.utils.data.DataLoader(
     pin_memory=True # Added for faster data transfer
 )
 
-# 4. SETUP MODELS
+# SETUP MODELS
 encoder = VisionTransformer(
     patch_dim=cfg['model']['patch_dim'], 
     embed_dim=cfg['model']['embed_dim'], 
@@ -51,24 +42,19 @@ predictor = MaskPredictor(
 )
 model = IJEPA(encoder, predictor, ema_momentum=cfg['train']['ema_momentum']).to(device)
 
-# 5. OPTIMIZATION
+# OPTIMIZATION
+collator = QG_MaskCollator(grid_size=16)
 optimizer = optim.AdamW(
     model.parameters(), 
     lr=cfg['train']['base_lr'], 
     weight_decay=cfg['train']['weight_decay']
 )
-masker = BlockMaskGenerator(
-    grid_size=cfg['masking']['grid_size'],
-    num_targets=cfg['masking']['num_targets'],
-    target_size=tuple(cfg['masking']['target_size']),
-    context_size=tuple(cfg['masking']['context_size'])
-)
 
-# 6. RESUME
+# RESUME
 checkpoint_path = f"{cfg['train']['checkpoint_dir']}/latest_checkpoint.pth"
 start_epoch, best_loss = load_checkpoint(checkpoint_path, model, optimizer, device)
 
-# 7. TRAINING LOOP
+# TRAINING LOOP
 print("--- Starting Training Loop ---")
 for epoch in range(start_epoch, cfg['train']['epochs']):
     current_lr = adjust_learning_rate(
@@ -81,28 +67,30 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
     epoch_loss = 0
     model.train()
     
-    for images, _ in dataloader:
+    for images, labels, ctx_idx, trg_idx in dataloader:
         print("Processing batch in dataloader...")
         images = images.to(device, non_blocking=True)
+        ctx_idx = ctx_idx.to(device, non_blocking=True)
+        trg_idx = trg_idx.to(device, non_blocking=True)
+        
         optimizer.zero_grad()
 
         # --- MIXED PRECISION FORWARD PASS ---
         with autocast('cuda'):
-            patches = generate_patches(images) 
-            c_mask, t_mask = masker.generate_batch_masks(images.size(0), device)
-            
-            # 1. Teacher Forward (No Gradients)
+            patches = generate_patches(images) # [B, 256, D]
+
+            # Teacher gets full patches, but we index the output
             with torch.no_grad():
-                full_target_latents = model.target_encoder(patches) 
-                target_list = [full_target_latents[i, t_mask[i]] for i in range(images.size(0))]
-                target_latents = pad_sequence(target_list, batch_first=True)
-            
-            # 2. Student Forward
-            context_latents = model.context_encoder(patches, c_mask)
-            preds = model.predictor(context_latents, t_mask)
-            
-            # 3. Loss Calculation
-            loss = masked_mse_loss(preds, target_latents, t_mask)        
+                target_encoder_out = model.target_encoder(patches)
+                # Expand target indices to match latent dimension
+                trg_idx_exp = trg_idx.unsqueeze(-1).expand(-1, -1, target_encoder_out.size(-1))
+                target_latents = torch.gather(target_encoder_out, 1, trg_idx_exp)
+
+            # Student only gets context patches via index selection
+            context_latents = model.context_encoder(patches, indices=ctx_idx)
+            preds = model.predictor(context_latents, trg_idx)
+
+            loss = F.mse_loss(preds, target_latents) # Standard MSE now works!    
 
         # --- SCALED BACKWARD PASS ---
         scaler.scale(loss).backward()

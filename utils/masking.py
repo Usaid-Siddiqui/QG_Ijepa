@@ -1,64 +1,66 @@
 import torch
+import math
 
-class BlockMaskGenerator:
-    def __init__(self, grid_size=16, num_targets=4, target_size=(3, 5), context_size=(8, 12)):
-        """
-        grid_size: 16 (for 128x128 image with patch_size 8)
-        num_targets: Number of target blocks to predict
-        """
+class QG_MaskCollator:
+    def __init__(self, grid_size=16, context_scale=(0.4, 0.6), target_scale=(0.15, 0.2), num_targets=4):
         self.grid_size = grid_size
+        self.num_patches = grid_size ** 2
+        self.context_scale = context_scale
+        self.target_scale = target_scale
         self.num_targets = num_targets
-        self.target_size = target_size
-        self.context_size = context_size
 
-    def _get_random_block(self, low, high):
-        """Generates a single rectangular mask."""
-        h = torch.randint(low[0], high[0], (1,)).item()
-        w = torch.randint(low[1], high[1], (1,)).item()
+    def _get_block_indices(self, scale_range):
+        # 1. Determine random block dimensions
+        target_area = self.num_patches * torch.empty(1).uniform_(*scale_range).item()
+        aspect_ratio = torch.empty(1).uniform_(0.75, 1.5).item()
         
-        top = torch.randint(0, self.grid_size - h + 1, (1,)).item()
-        left = torch.randint(0, self.grid_size - w + 1, (1,)).item()
+        h = max(2, int(round(math.sqrt(target_area * aspect_ratio))))
+        w = max(2, int(round(math.sqrt(target_area / aspect_ratio))))
         
-        mask = torch.zeros((self.grid_size, self.grid_size), dtype=torch.bool)
-        mask[top:top+h, left:left+w] = True
-        return mask.view(-1)
+        # Ensure block fits in grid
+        h = min(h, self.grid_size - 1)
+        w = min(w, self.grid_size - 1)
+        
+        # 2. Pick random top-left corner
+        top = torch.randint(0, self.grid_size - h, (1,)).item()
+        left = torch.randint(0, self.grid_size - w, (1,)).item()
+        
+        # 3. Create grid of indices
+        grid = torch.arange(self.num_patches).view(self.grid_size, self.grid_size)
+        block_indices = grid[top:top+h, left:left+w].flatten()
+        return block_indices
 
-    def generate_batch_masks(self, batch_size, device):
-        """
-        Returns:
-            context_masks: [B, num_patches] boolean
-            target_masks: [B, num_patches] boolean
-        """
-        all_context = []
-        all_target = []
+    def __call__(self, batch):
+        # batch is a list of (image, label) from QG_Dataset
+        images = torch.stack([item[0] for item in batch])
+        labels = torch.tensor([item[1] for item in batch])
+        B = images.shape[0]
 
-        for _ in range(batch_size):
-            # 1. Create Target Mask (union of several small blocks)
-            t_mask = torch.zeros(self.grid_size**2, dtype=torch.bool)
+        all_ctx_indices = []
+        all_trg_indices = []
+
+        for _ in range(B):
+            # Generate Target Blocks
+            targets = []
+            combined_target_mask = torch.zeros(self.num_patches, dtype=torch.bool)
             for _ in range(self.num_targets):
-                t_mask |= self._get_random_block(self.target_size, (self.target_size[1]+1, self.target_size[1]+1))
+                indices = self._get_block_indices(self.target_scale)
+                targets.append(indices)
+                combined_target_mask[indices] = True
             
-            # 2. Create Context Mask (one larger block)
-            c_mask = self._get_random_block(self.context_size, (self.context_size[1]+1, self.context_size[1]+1))
+            # Generate Context Block and ensure it doesn't overlap
+            ctx_indices = self._get_block_indices(self.context_scale)
+            # Remove target patches from context
+            ctx_mask = torch.zeros(self.num_patches, dtype=torch.bool)
+            ctx_mask[ctx_indices] = True
+            ctx_mask[combined_target_mask] = False
             
-            # 3. I-JEPA Rule: Context patches must NOT include Target patches
-            c_mask = c_mask & ~t_mask
-            
-            all_context.append(c_mask)
-            all_target.append(t_mask)
+            all_ctx_indices.append(torch.where(ctx_mask)[0])
+            all_trg_indices.append(torch.cat(targets))
 
-        return torch.stack(all_context).to(device), torch.stack(all_target).to(device)
+        # Pad indices to uniform length for batching
+        # This makes the tensor shape [B, Fixed_N]
+        ctx_collated = torch.nn.utils.rnn.pad_sequence(all_ctx_indices, batch_first=True, padding_value=-1)
+        trg_collated = torch.nn.utils.rnn.pad_sequence(all_trg_indices, batch_first=True, padding_value=-1)
 
-def apply_batch_mask(x_patches, mask):
-    """
-    Since each image in the batch has a different number of True values in its mask
-    after the 'c_mask & ~t_mask' operation, we must extract them individually.
-    
-    Inputs:
-        x_patches: [B, N, D] (from generate_patches)
-        mask: [B, N] (boolean mask)
-    Returns:
-        A list of tensors, each [num_active_patches, D]
-    """
-    # Use list comprehension to handle varying sequence lengths per batch item
-    return [x_patches[i, mask[i]] for i in range(x_patches.size(0))]
+        return images, labels, ctx_collated, trg_collated

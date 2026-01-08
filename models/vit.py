@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import math
 import numpy as np
-from torch.nn.utils.rnn import pad_sequence
 
 def trunc_normal_(tensor, std=0.02, a=-2.0, b=2.0):
     """ Fills the input Tensor with values drawn from a truncated normal distribution. """
@@ -107,14 +106,13 @@ class VisionTransformer(nn.Module):
         super().__init__()
         self.patch_embed = nn.Linear(patch_dim, embed_dim)
         
-        # FIX 1: Spatially Aware Fixed Embeddings
+        # Fixed 2D Sine-Cosine Positional Embeddings
         self.pos_embed = nn.Parameter(torch.zeros(1, 256, embed_dim), requires_grad=False)
         self.pos_embed.data.copy_(get_2d_sincos_pos_embed(embed_dim, 16))
         
         self.blocks = nn.ModuleList([Block(embed_dim, num_heads) for i in range(depth)])
         self.norm = nn.LayerNorm(embed_dim)
         
-        # FIX 2: Stable Weight Initialization
         self.apply(self._init_weights)
         self._fix_init_weight()
 
@@ -125,32 +123,31 @@ class VisionTransformer(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def _fix_init_weight(self):
-        """ Rescales weights based on layer depth to prevent gradient explosion """
         for i, block in enumerate(self.blocks):
-            # Scale attention projection and MLP second layer
             block.attn.proj.weight.data.div_(math.sqrt(2.0 * (i + 1)))
             block.mlp.fc2.weight.data.div_(math.sqrt(2.0 * (i + 1)))
-    # FIX 3: Mask-Aware Forward Pass
-    def forward(self, x_patches, mask=None):
+
+    def forward(self, x_patches, indices=None):
+        """
+        x_patches: [B, 256, D] (the full patchified image)
+        indices: [B, N_keep] (integer indices of patches to keep)
+        """
         B, N, D = x_patches.shape
 
-        # 1. Project patches to embedding dimension
-        x = self.patch_embed(x_patches) # [B, N, embed_dim]
-
-        # 2. Add Positional Embeddings BEFORE masking
-        # This ensures the model knows WHERE the context patches came from
+        # 1. Project and add Positional Embeddings to ALL patches
+        x = self.patch_embed(x_patches) 
         x = x + self.pos_embed
 
-        if mask is not None:
-            # 3. Extract active patches for each item in the batch
-            # List of tensors: [(num_patches_i, D), (num_patches_j, D), ...]
-            x_masked = [x[i, mask[i]] for i in range(B)] 
+        # 2. OPTIMIZED: High-speed indexing
+        if indices is not None:
+            # indices shape: [B, N_keep]
+            # expanded to [B, N_keep, embed_dim] to match 'x'
+            idx_expanded = indices.unsqueeze(-1).expand(-1, -1, x.size(-1))
             
-            # 4. Pad sequences to the max length in the current batch
-            # This is what specifically fixes your "invalid shape" RuntimeError
-            x = pad_sequence(x_masked, batch_first=True) 
+            # Select only the patches specified by the collator
+            x = torch.gather(x, dim=1, index=idx_expanded)
         
-        # 5. Process through Transformer blocks
+        # 3. Process through Transformer blocks (sequence length is now uniform)
         for block in self.blocks:
             x = block(x)
             
