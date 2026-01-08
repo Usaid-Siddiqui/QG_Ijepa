@@ -21,6 +21,11 @@ class QG_Dataset(Dataset):
         return len(self.indices)
     
     def __getitem__(self, idx):
+        if self.h5 is None: # Open once per worker process
+            self.h5 = h5py.File(self.h5_path, 'r')
+            self.data = self.h5['images']
+            self.meta = self.h5['meta']
+
         # Load as numpy first, then convert to tensor
         i = self.indices[idx]
         img = self.data[i] 

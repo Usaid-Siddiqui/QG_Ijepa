@@ -67,6 +67,7 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
     epoch_loss = 0
     model.train()
     
+    print("Starting epoch...")
     for images, labels, ctx_idx, trg_idx in dataloader:
         images = images.to(device, non_blocking=True)
         ctx_idx = ctx_idx.to(device, non_blocking=True)
