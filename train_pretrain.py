@@ -68,7 +68,6 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
     model.train()
     
     for images, labels, ctx_idx, trg_idx in dataloader:
-        print("Processing batch in dataloader...")
         images = images.to(device, non_blocking=True)
         ctx_idx = ctx_idx.to(device, non_blocking=True)
         trg_idx = trg_idx.to(device, non_blocking=True)
@@ -102,7 +101,6 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
 
     avg_loss = epoch_loss / len(dataloader)
     logger.info(f"Epoch [{epoch+1}/{cfg['train']['epochs']}] | Loss: {avg_loss:.6f} | LR: {current_lr:.6f}")
-    print(f"\n=> Epoch {epoch+1} Complete. Average Loss: {avg_loss:.6f}")
     
     # 8. CHECKPOINTING
     is_best = avg_loss < best_loss

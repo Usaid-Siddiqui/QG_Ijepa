@@ -21,9 +21,8 @@ class QG_Dataset(Dataset):
         return len(self.indices)
     
     def __getitem__(self, idx):
-        i = self.indices[idx]
-        print(f"Loading item {i} from dataset...")
         # Load as numpy first, then convert to tensor
+        i = self.indices[idx]
         img = self.data[i] 
         
         # Convert to torch [C, H, W]
