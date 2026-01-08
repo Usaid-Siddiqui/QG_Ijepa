@@ -145,6 +145,7 @@ class VisionTransformer(nn.Module):
             idx_expanded = indices.unsqueeze(-1).expand(-1, -1, x.size(-1))
             
             # Select only the patches specified by the collator
+            indices = indices.clamp(min=0) 
             x = torch.gather(x, dim=1, index=idx_expanded)
         
         # 3. Process through Transformer blocks (sequence length is now uniform)

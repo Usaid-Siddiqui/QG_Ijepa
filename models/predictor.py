@@ -34,6 +34,7 @@ class MaskPredictor(nn.Module):
         
         # target_indices expanded to [B, N_targets, predictor_dim]
         trg_idx_expanded = target_indices.unsqueeze(-1).expand(-1, -1, full_pos.size(-1))
+        trg_idx_expanded = trg_idx_expanded.clamp(min=0)
         pos_target = torch.gather(full_pos, 1, trg_idx_expanded)
         
         # 3. Prepare mask tokens and add spatial info
