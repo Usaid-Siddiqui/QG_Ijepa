@@ -1,7 +1,7 @@
 import torch
 import torch.nn.functional as F
 import yaml
-from logging import setup_logger
+from utils.logging import setup_logger
 import os
 import datetime
 
