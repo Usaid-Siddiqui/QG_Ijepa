@@ -7,6 +7,7 @@ from models import IJEPA, VisionTransformer, MaskPredictor
 from torch.nn.utils.rnn import pad_sequence
 from torch.amp import autocast, GradScaler # Updated import
 import torch.nn.functional as F
+from tqdm import tqdm
 
 # Initialize Scaler with the new non-deprecated syntax
 scaler = GradScaler('cuda')
@@ -67,8 +68,9 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
     epoch_loss = 0
     model.train()
     
+    pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}", unit="batch")
     print("Starting epoch...")
-    for images, labels, ctx_idx, trg_idx in dataloader:
+    for images, labels, ctx_idx, trg_idx in pbar:
         images = images.to(device, non_blocking=True)
         ctx_idx = ctx_idx.to(device, non_blocking=True)
         trg_idx = trg_idx.to(device, non_blocking=True)
