@@ -2,13 +2,7 @@ import torch
 import torch.optim as optim
 import os
 import datetime
-from utils.data import QG_Dataset
-from utils.misc import generate_patches, load_config
-from utils.masking import BlockMaskGenerator
-from utils.optim import adjust_learning_rate
-from utils.logging import setup_logger
-from utils.checkpointing import save_checkpoint, load_checkpoint
-from utils.metrics import masked_mse_loss
+from utils import QG_Dataset, generate_patches, load_config, BlockMaskGenerator, adjust_learning_rate, setup_logger, save_checkpoint, load_checkpoint, masked_mse_loss
 from models import IJEPA, VisionTransformer, MaskPredictor
 from torch.nn.utils.rnn import pad_sequence
 from torch.amp import autocast, GradScaler # Updated import
