@@ -21,12 +21,14 @@ logger, checkpoint_dir, device = init_experiment(cfg)
 # SETUP DATA
 dataset = QG_Dataset(cfg['data']['h5_path'])
 logger.info(f"--- Dataset Loaded (Size: {len(dataset)}) ---")
+collator = QG_MaskCollator(grid_size=16)
 dataloader = torch.utils.data.DataLoader(
     dataset, 
     batch_size=cfg['data']['batch_size'], 
     shuffle=True,
     num_workers=cfg['data']['num_workers'],
-    pin_memory=True # Added for faster data transfer
+    pin_memory=True, # Added for faster data transfer
+    collate_fn=collator
 )
 
 # SETUP MODELS
@@ -44,7 +46,6 @@ predictor = MaskPredictor(
 model = IJEPA(encoder, predictor, ema_momentum=cfg['train']['ema_momentum']).to(device)
 
 # OPTIMIZATION
-collator = QG_MaskCollator(grid_size=16)
 optimizer = optim.AdamW(
     model.parameters(), 
     lr=cfg['train']['base_lr'], 
