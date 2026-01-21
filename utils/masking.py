@@ -10,37 +10,35 @@ class QG_MaskCollator:
         self.num_targets = num_targets
 
     def _get_block_indices(self, scale_range):
-        # 1. Determine random block dimensions
         target_area = self.num_patches * torch.empty(1).uniform_(*scale_range).item()
         aspect_ratio = torch.empty(1).uniform_(0.75, 1.5).item()
         
         h = max(2, int(round(math.sqrt(target_area * aspect_ratio))))
         w = max(2, int(round(math.sqrt(target_area / aspect_ratio))))
         
-        # Ensure block fits in grid
         h = min(h, self.grid_size - 1)
         w = min(w, self.grid_size - 1)
         
-        # 2. Pick random top-left corner
         top = torch.randint(0, self.grid_size - h, (1,)).item()
         left = torch.randint(0, self.grid_size - w, (1,)).item()
         
-        # 3. Create grid of indices
         grid = torch.arange(self.num_patches).view(self.grid_size, self.grid_size)
         block_indices = grid[top:top+h, left:left+w].flatten()
         return block_indices
 
     def __call__(self, batch):
-        # batch is a list of (image, label) from QG_Dataset
         images = torch.stack([item[0] for item in batch])
         labels = torch.tensor([item[1] for item in batch])
         B = images.shape[0]
 
-        all_ctx_indices = []
-        all_trg_indices = []
+        all_ctx_indices, all_trg_indices = [], []
+        
+        # Initialize trackers for the smallest mask size in the batch
+        min_ctx = self.num_patches
+        min_trg = self.num_patches 
 
         for _ in range(B):
-            # Generate Target Blocks
+            # 1. Generate Target Blocks
             targets = []
             combined_target_mask = torch.zeros(self.num_patches, dtype=torch.bool)
             for _ in range(self.num_targets):
@@ -48,19 +46,27 @@ class QG_MaskCollator:
                 targets.append(indices)
                 combined_target_mask[indices] = True
             
-            # Generate Context Block and ensure it doesn't overlap
+            # 2. Generate Context Block
             ctx_indices = self._get_block_indices(self.context_scale)
-            # Remove target patches from context
+            
+            # 3. Remove overlaps (Target patches are never in Context)
             ctx_mask = torch.zeros(self.num_patches, dtype=torch.bool)
             ctx_mask[ctx_indices] = True
             ctx_mask[combined_target_mask] = False
             
-            all_ctx_indices.append(torch.where(ctx_mask)[0])
-            all_trg_indices.append(torch.cat(targets))
+            curr_ctx = torch.where(ctx_mask)[0]
+            curr_trg = torch.cat(targets)
+            
+            all_ctx_indices.append(curr_ctx)
+            all_trg_indices.append(curr_trg)
+            
+            # Update minimum lengths for this batch
+            min_ctx = min(min_ctx, len(curr_ctx))
+            min_trg = min(min_trg, len(curr_trg))
 
-        # Pad indices to uniform length for batching
-        # This makes the tensor shape [B, Fixed_N]
-        ctx_collated = torch.nn.utils.rnn.pad_sequence(all_ctx_indices, batch_first=True, padding_value=-1)
-        trg_collated = torch.nn.utils.rnn.pad_sequence(all_trg_indices, batch_first=True, padding_value=-1)
+        # 4. Truncate all masks to the minimum length
+        # This removes the need for pad_sequence and -1 padding
+        ctx_collated = torch.stack([c[:min_ctx] for c in all_ctx_indices])
+        trg_collated = torch.stack([t[:min_trg] for t in all_trg_indices])
 
         return images, labels, ctx_collated, trg_collated
