@@ -69,9 +69,10 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
     model.train()
     
     pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}", unit="batch")
-    print("Starting epoch...")
     for images, labels, ctx_idx, trg_idx in pbar:
+        print("DEBUG: Batch successfully loaded from DataLoader")
         images = images.to(device, non_blocking=True)
+        print("DEBUG: Data moved to GPU")
         ctx_idx = ctx_idx.to(device, non_blocking=True)
         trg_idx = trg_idx.to(device, non_blocking=True)
         
@@ -79,6 +80,7 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
 
         # --- MIXED PRECISION FORWARD PASS ---
         with autocast('cuda'):
+            print("DEBUG: Starting model forward pass...")
             patches = generate_patches(images) # [B, 256, D]
 
             # Teacher gets full patches, but we index the output
@@ -95,6 +97,7 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
             loss = F.mse_loss(preds, target_latents) # Standard MSE now works!    
 
         # --- SCALED BACKWARD PASS ---
+        print("DEBUG: Starting backward pass...")
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
