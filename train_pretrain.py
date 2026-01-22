@@ -8,6 +8,7 @@ from torch.nn.utils.rnn import pad_sequence
 from torch.amp import autocast, GradScaler # Updated import
 import torch.nn.functional as F
 from tqdm import tqdm
+import shutil
 
 # Initialize Scaler with the new non-deprecated syntax
 scaler = GradScaler('cuda')
@@ -17,6 +18,10 @@ cfg = load_config("colab_config.yaml")
 
 # INITIALIZE LOGGING
 logger, checkpoint_dir, device = init_experiment(cfg)
+
+# Save current config for reproducibility
+shutil.copy("colab_config.yaml", os.path.join(checkpoint_dir, "config_used.yaml"))
+logger.info(f"Config saved to {checkpoint_dir}")
 
 # SETUP DATA
 dataset = QG_Dataset(cfg['data']['h5_path'])
