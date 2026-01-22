@@ -21,7 +21,12 @@ logger, checkpoint_dir, device = init_experiment(cfg)
 # SETUP DATA
 dataset = QG_Dataset(cfg['data']['h5_path'])
 logger.info(f"--- Dataset Loaded (Size: {len(dataset)}) ---")
-collator = QG_MaskCollator(grid_size=16)
+collator = QG_MaskCollator(
+    grid_size=cfg['masking']['grid_size'],
+    context_scale=cfg['masking']['context_scale'], # Matches YAML keys
+    target_scale=cfg['masking']['target_scale'],
+    num_targets=cfg['masking']['num_targets']
+)
 dataloader = torch.utils.data.DataLoader(
     dataset, 
     batch_size=cfg['data']['batch_size'], 
@@ -71,9 +76,7 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
     
     pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}", unit="batch")
     for images, labels, ctx_idx, trg_idx in pbar:
-        print("DEBUG: Batch successfully loaded from DataLoader")
         images = images.to(device, non_blocking=True)
-        print("DEBUG: Data moved to GPU")
         ctx_idx = ctx_idx.to(device, non_blocking=True)
         trg_idx = trg_idx.to(device, non_blocking=True)
         
@@ -81,7 +84,6 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
 
         # --- MIXED PRECISION FORWARD PASS ---
         with autocast('cuda'):
-            print("DEBUG: Starting model forward pass...")
             patches = generate_patches(images) # [B, 256, D]
 
             # Teacher gets full patches, but we index the output
@@ -91,6 +93,8 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
                 trg_idx_exp = trg_idx.unsqueeze(-1).expand(-1, -1, target_encoder_out.size(-1))
                 target_latents = torch.gather(target_encoder_out, 1, trg_idx_exp)
 
+                target_latents = (target_latents - target_latents.mean(dim=-2, keepdim=True)) / (target_latents.std(dim=-2, keepdim=True) + 1e-6)
+
             # Student only gets context patches via index selection
             context_latents = model.context_encoder(patches, indices=ctx_idx)
             preds = model.predictor(context_latents, trg_idx)
@@ -98,7 +102,6 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
             loss = F.mse_loss(preds, target_latents) # Standard MSE now works!    
 
         # --- SCALED BACKWARD PASS ---
-        print("DEBUG: Starting backward pass...")
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
