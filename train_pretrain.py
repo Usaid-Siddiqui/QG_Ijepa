@@ -58,8 +58,11 @@ optimizer = optim.AdamW(
 )
 
 # RESUME
-checkpoint_path = f"{cfg['train']['checkpoint_dir']}/latest_checkpoint.pth"
-start_epoch, best_loss = load_checkpoint(checkpoint_path, model, optimizer, device)
+resume_path = cfg['train'].get('resume_from')
+if not resume_path:
+    resume_path = os.path.join(cfg['train']['checkpoint_dir'], "latest_checkpoint.pth")
+
+start_epoch, best_loss = load_checkpoint(resume_path, model, optimizer, device)
 
 # TRAINING LOOP
 print("--- Starting Training Loop ---")

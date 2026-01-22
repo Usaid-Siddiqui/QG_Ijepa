@@ -23,6 +23,9 @@ train:
   # Paths in Drive for persistent storage
   checkpoint_dir: "/content/drive/MyDrive/QG_IJEPA/checkpoints"
   log_dir: "/content/drive/MyDrive/QG_IJEPA/logs"
+  
+  # Optional: Resume from a specific checkpoint
+  #resume_from: "/content/drive/MyDrive/QG_IJEPA/checkpoints/20260122_0154/checkpoint_epoch_8.pth"
 
 masking:
   grid_size: 16
