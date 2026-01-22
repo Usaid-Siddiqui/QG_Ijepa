@@ -1,7 +1,7 @@
 # config_colab.yaml
 data:
   h5_path: "/content/qg.h5"         # Point to the FAST local Colab disk
-  batch_size: 64                     # Increased for L4/T4 GPUs
+  batch_size: 256                   # Increased for L4/T4 GPUs
   num_workers: 2                    # Parallel data loading
 
 model:
@@ -23,7 +23,7 @@ train:
   # Paths in Drive for persistent storage
   checkpoint_dir: "/content/drive/MyDrive/QG_IJEPA/checkpoints"
   log_dir: "/content/drive/MyDrive/QG_IJEPA/logs"
-  
+
   # Optional: Resume from a specific checkpoint
   #resume_from: "/content/drive/MyDrive/QG_IJEPA/checkpoints/20260122_0154/checkpoint_epoch_8.pth"
 
