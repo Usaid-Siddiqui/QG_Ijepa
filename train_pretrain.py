@@ -101,6 +101,7 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
                 trg_idx_exp = trg_idx.unsqueeze(-1).expand(-1, -1, target_encoder_out.size(-1))
                 target_latents = torch.gather(target_encoder_out, 1, trg_idx_exp)
 
+                # Try to avoid collapse by normalizing target latents
                 target_latents = (target_latents - target_latents.mean(dim=-2, keepdim=True)) / (target_latents.std(dim=-2, keepdim=True) + 1e-6)
 
             # Student only gets context patches via index selection
