@@ -108,7 +108,7 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
             context_latents = model.context_encoder(patches, indices=ctx_idx)
             preds = model.predictor(context_latents, trg_idx)
 
-            loss = F.mse_loss(preds, target_latents) # Standard MSE now works!    
+            loss = F.mse_loss(preds, target_latents, reduction='mean') # Standard MSE now works!    
 
         # --- SCALED BACKWARD PASS ---
         scaler.scale(loss).backward()
