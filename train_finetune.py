@@ -48,7 +48,7 @@ def run_evaluation():
         raise FileNotFoundError(f"Checkpoint not found at {ckpt_path}")
         
     checkpoint = torch.load(ckpt_path, map_location=device)
-    encoder.load_state_dict(checkpoint['encoder_state_dict'])
+    encoder.load_state_dict(checkpoint)
     print(f"--- Loaded Pre-trained Encoder from {ckpt_path} ---")
 
     # 2. INITIALIZE LINEAR PROBE
