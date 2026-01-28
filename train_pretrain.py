@@ -91,24 +91,31 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
         optimizer.zero_grad()
 
         # --- MIXED PRECISION FORWARD PASS ---
+        # --- MIXED PRECISION FORWARD PASS ---
         with autocast('cuda'):
             patches = generate_patches(images) # [B, 256, D]
 
-            # Teacher gets full patches, but we index the output
+            # 1. Teacher Forward (No Grad)
             with torch.no_grad():
                 target_encoder_out = model.target_encoder(patches)
-                # Expand target indices to match latent dimension
+                
+                # Apply LayerNorm to teacher features BEFORE gathering
+                target_encoder_out = F.layer_norm(target_encoder_out, (target_encoder_out.size(-1),))
+                
+                # Expand target indices and gather
                 trg_idx_exp = trg_idx.unsqueeze(-1).expand(-1, -1, target_encoder_out.size(-1))
                 target_latents = torch.gather(target_encoder_out, 1, trg_idx_exp)
 
-                # Try to avoid collapse by normalizing target latents
-                target_latents = (target_latents - target_latents.mean(dim=-2, keepdim=True)) / (target_latents.std(dim=-2, keepdim=True) + 1e-6)
+            # 2. Student Forward (Encoder + Predictor)
+            # We now use the new model forward which passes ctx_idx to the predictor
+            preds = model(patches, ctx_idx, trg_idx)
+            
+            # Apply LayerNorm to student predictions so they match the teacher's scale
+            preds = F.layer_norm(preds, (preds.size(-1),))
 
-            # Student only gets context patches via index selection
-            context_latents = model.context_encoder(patches, indices=ctx_idx)
-            preds = model.predictor(context_latents, trg_idx)
-
-            loss = F.mse_loss(preds, target_latents, reduction='mean') # Standard MSE now works!    
+            # 3. Robust Loss Function
+            # SmoothL1 is less aggressive than MSE and helps break plateaus
+            loss = F.smooth_l1_loss(preds, target_latents, beta=1.0)
 
         # --- SCALED BACKWARD PASS ---
         scaler.scale(loss).backward()

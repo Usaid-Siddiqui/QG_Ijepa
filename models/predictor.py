@@ -18,39 +18,36 @@ class MaskPredictor(nn.Module):
         
         nn.init.trunc_normal_(self.mask_token, std=0.02)
 
-    def forward(self, context_latents, target_indices):
-        """
-        context_latents: [B, N_ctx, encoder_dim]
-        target_indices: [B, N_targets]
-        """
+    def forward(self, context_latents, context_indices, target_indices):
         B = context_latents.shape[0]
 
         # 1. Map context to predictor dimension
-        context_latents = self.predictor_embed(context_latents)
+        x_ctx = self.predictor_embed(context_latents)
         
-        # 2. OPTIMIZED: Get target positional embeddings using gather
-        # full_pos shape: [B, 256, predictor_dim]
+        # 2. Add Positional Embeddings to CONTEXT
         full_pos = self.pos_embed.expand(B, -1, -1)
         
-        # target_indices expanded to [B, N_targets, predictor_dim]
+        ctx_idx_expanded = context_indices.unsqueeze(-1).expand(-1, -1, full_pos.size(-1))
+        pos_ctx = torch.gather(full_pos, 1, ctx_idx_expanded)
+        x_ctx = x_ctx + pos_ctx # Student now knows WHERE the context is
+
+        # 3. Prepare target mask tokens with Positional Embeddings
         trg_idx_expanded = target_indices.unsqueeze(-1).expand(-1, -1, full_pos.size(-1))
-        trg_idx_expanded = trg_idx_expanded.clamp(min=0)
         pos_target = torch.gather(full_pos, 1, trg_idx_expanded)
         
-        # 3. Prepare mask tokens and add spatial info
-        num_target_patches = pos_target.shape[1]
-        mask_tokens = self.mask_token.expand(B, num_target_patches, -1)
-        target_tokens = mask_tokens + pos_target
+        mask_tokens = self.mask_token.expand(B, target_indices.shape[1], -1)
+        x_trg = mask_tokens + pos_target
         
         # 4. Concatenate and process
-        x = torch.cat([context_latents, target_tokens], dim=1)
+        x = torch.cat([x_ctx, x_trg], dim=1)
         
         for block in self.blocks:
             x = block(x)
         
         x = self.predictor_norm(x)
         
-        # 5. Extract only the target predictions
-        preds = x[:, context_latents.shape[1]:]
+        # 5. Extract target predictions and project back to encoder_dim
+        preds = x[:, x_ctx.shape[1]:]
         preds = self.predictor_proj(preds)
+        
         return preds
