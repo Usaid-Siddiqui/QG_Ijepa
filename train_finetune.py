@@ -7,6 +7,7 @@ from sklearn.metrics import roc_auc_score, roc_curve
 import numpy as np
 import os
 from tqdm import tqdm
+from utils.misc import generate_patches
 
 from utils import QG_Dataset, load_config
 from models import VisionTransformer
@@ -23,6 +24,7 @@ class LinearProbe(nn.Module):
         self.head = nn.Linear(embed_dim, 1)
         
     def forward(self, x):
+        x_patches = generate_patches(x, patch_size=8)
         with torch.no_grad():
             features = self.encoder(x)
             # Global Average Pooling (GAP) across the patch dimension
