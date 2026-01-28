@@ -26,7 +26,7 @@ class LinearProbe(nn.Module):
     def forward(self, x):
         x_patches = generate_patches(x, patch_size=8)
         with torch.no_grad():
-            features = self.encoder(x)
+            features = self.encoder(x_patches)
             # Global Average Pooling (GAP) across the patch dimension
             # Shape: [Batch, Tokens, Dim] -> [Batch, Dim]
             global_feat = features.mean(dim=1) 
