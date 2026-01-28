@@ -3,14 +3,14 @@ import numpy as np
 import sys
 
 IN_FILE  = "/Volumes/Usaids_USB/Quark_Gluon.h5"
-OUT_FILE = "/Volumes/Usaids_USB/qg_medium_train.h5"
+OUT_FILE = "/Volumes/Usaids_USB/qg_medium_test.h5"
 
-N = 100_000        # Total samples (must be even)
+N = 20_000        # Total samples (must be even)
 batch_size = 2000  # Number of samples to copy per update (smaller for more frequent prints)
 
 with h5py.File(IN_FILE, "r") as fin:
-    images = fin["train_jet"]
-    meta   = fin["train_meta"]
+    images = fin["test_jet"]
+    meta   = fin["test_meta"]
     
     # 1. Balanced Index Selection
     print("Analyzing dataset for balanced split...")

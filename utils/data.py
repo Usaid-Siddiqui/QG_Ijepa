@@ -6,6 +6,7 @@ from utils.misc import pad_to_128
 
 class QG_Dataset(Dataset):
     def __init__(self, h5_path, indices=None):
+        self.h5_path = h5_path
         self.h5 = h5py.File(h5_path, 'r')
 
         # Lazy load data

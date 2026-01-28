@@ -32,3 +32,11 @@ masking:
   num_targets: 4
   target_size: [3, 5]
   context_size: [8, 12]
+
+finetune:
+  checkpoint_to_load: "/content/drive/MyDrive/QG_IJEPA/checkpoints/best_encoder.pth"
+  train_h5_path: "/content/qg_finetune_train.h5" # Just for the Linear Head
+  test_h5_path: "/content/qg_test.h5"           # The "Vault" for ROC AUC
+  batch_size: 128
+  epochs: 10
+  lr: 0.001
