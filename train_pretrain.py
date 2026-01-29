@@ -5,12 +5,12 @@ import datetime
 from utils import QG_Dataset, generate_patches, load_config, adjust_learning_rate, setup_logger, save_checkpoint, load_checkpoint, masked_mse_loss, init_experiment, QG_MaskCollator
 from models import IJEPA, VisionTransformer, MaskPredictor
 from torch.nn.utils.rnn import pad_sequence
-from torch.amp import autocast, GradScaler # Updated import
+from torch.amp import autocast, GradScaler
 import torch.nn.functional as F
 from tqdm import tqdm
 import shutil
 
-# Initialize Scaler with the new non-deprecated syntax
+# Initialize Scaler
 scaler = GradScaler('cuda')
 
 # LOAD CONFIGURATION
@@ -19,7 +19,7 @@ cfg = load_config("colab_config.yaml")
 # INITIALIZE LOGGING
 logger, checkpoint_dir, device = init_experiment(cfg)
 
-# Save current config for reproducibility
+# Save current config
 shutil.copy("colab_config.yaml", os.path.join(checkpoint_dir, "config_used.yaml"))
 logger.info(f"Config saved to {checkpoint_dir}")
 
@@ -28,7 +28,7 @@ dataset = QG_Dataset(cfg['data']['h5_path'])
 logger.info(f"--- Dataset Loaded (Size: {len(dataset)}) ---")
 collator = QG_MaskCollator(
     grid_size=cfg['masking']['grid_size'],
-    context_scale=cfg['masking']['context_scale'], # Matches YAML keys
+    context_scale=cfg['masking']['context_scale'],
     target_scale=cfg['masking']['target_scale'],
     num_targets=cfg['masking']['num_targets']
 )
@@ -37,7 +37,7 @@ dataloader = torch.utils.data.DataLoader(
     batch_size=cfg['data']['batch_size'], 
     shuffle=True,
     num_workers=cfg['data']['num_workers'],
-    pin_memory=True, # Added for faster data transfer
+    pin_memory=True,
     collate_fn=collator
 )
 
@@ -70,7 +70,6 @@ if not resume_path:
 start_epoch, best_loss = load_checkpoint(resume_path, model, optimizer, device)
 
 # TRAINING LOOP
-print("--- Starting Training Loop ---")
 for epoch in range(start_epoch, cfg['train']['epochs']):
     current_lr = adjust_learning_rate(
         optimizer, epoch, 
@@ -91,11 +90,10 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
         optimizer.zero_grad()
 
         # --- MIXED PRECISION FORWARD PASS ---
-        # --- MIXED PRECISION FORWARD PASS ---
         with autocast('cuda'):
             patches = generate_patches(images) # [B, 256, D]
 
-            # 1. Teacher Forward (No Grad)
+            # Teacher Forward (No Grad)
             with torch.no_grad():
                 target_encoder_out = model.target_encoder(patches)
                 
@@ -106,15 +104,14 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
                 trg_idx_exp = trg_idx.unsqueeze(-1).expand(-1, -1, target_encoder_out.size(-1))
                 target_latents = torch.gather(target_encoder_out, 1, trg_idx_exp)
 
-            # 2. Student Forward (Encoder + Predictor)
+            # Student Forward (Encoder + Predictor)
             # We now use the new model forward which passes ctx_idx to the predictor
             preds = model(patches, ctx_idx, trg_idx)
             
             # Apply LayerNorm to student predictions so they match the teacher's scale
             preds = F.layer_norm(preds, (preds.size(-1),))
 
-            # 3. Robust Loss Function
-            # SmoothL1 is less aggressive than MSE and helps break plateaus
+            # SmoothL1 is less aggressive than MSE
             loss = F.smooth_l1_loss(preds, target_latents, beta=1.0)
 
         # --- SCALED BACKWARD PASS ---
