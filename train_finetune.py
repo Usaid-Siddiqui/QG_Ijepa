@@ -129,6 +129,27 @@ def run_evaluation():
     plt.savefig(plot_path)
     plt.show()
 
+    checkpoint_folder_name = os.path.basename(os.path.dirname(ckpt_path))
+    
+    #Define and create the designated finetune directory
+    base_save_path = "/content/drive/MyDrive/QG_IJEPA/finetune"
+    final_save_path = os.path.join(base_save_path, checkpoint_folder_name)
+    os.makedirs(final_save_path, exist_ok=True)
+
+    # Save the ROC Image
+    plt.savefig(os.path.join(final_save_path, "finetune_roc.png"))
+    
+    # Save the Weights (Linear Head)
+    torch.save(model.head.state_dict(), os.path.join(final_save_path, "finetune_head.pth"))
+    
+    # Create/Append to a simple Log Text file inside that folder
+    with open(os.path.join(final_save_path, "finetune_results.txt"), "a") as f:
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        f.write(f"[{timestamp}] AUC: {auc:.4f} | Epochs: {cfg['finetune']['epochs']} | LR: {cfg['finetune']['lr']}\n")
+
+    print(f"\n--- Results successfully saved to: {final_save_path} ---")
+
     print(f"\nFinal ROC AUC Score: {auc:.4f}")
     print(f"ROC curve saved to: {plot_path}")
 
