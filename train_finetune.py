@@ -12,6 +12,7 @@ from utils.misc import generate_patches
 from utils import QG_Dataset, load_config
 from models import VisionTransformer
 
+'''
 class LinearProbe(nn.Module):
     def __init__(self, encoder, embed_dim):
         super().__init__()
@@ -30,6 +31,32 @@ class LinearProbe(nn.Module):
             # Global Average Pooling (GAP) across the patch dimension
             # Shape: [Batch, Tokens, Dim] -> [Batch, Dim]
             global_feat = features.mean(dim=1) 
+        return self.head(global_feat)
+'''
+
+class MLPProbe(nn.Module):
+    def __init__(self, encoder, embed_dim):
+        super().__init__()
+        self.encoder = encoder
+        # Strictly freeze the pre-trained weights
+        for param in self.encoder.parameters():
+            param.requires_grad = False
+        
+        # A more powerful head: Linear -> ReLU -> Linear
+        self.head = nn.Sequential(
+            nn.Linear(embed_dim, 512),
+            nn.ReLU(),
+            nn.Dropout(0.1), # Prevents overfitting on the small head
+            nn.Linear(512, 1)
+        )
+        
+    def forward(self, x):
+        x_patches = generate_patches(x, patch_size=8)
+        with torch.no_grad():
+            features = self.encoder(x_patches)
+            global_feat = features.mean(dim=1) 
+        
+        # The head now handles non-linear complexity
         return self.head(global_feat)
 
 def run_evaluation():
@@ -54,7 +81,8 @@ def run_evaluation():
     print(f"--- Loaded Pre-trained Encoder from {ckpt_path} ---")
 
     # 2. INITIALIZE LINEAR PROBE
-    model = LinearProbe(encoder, cfg['model']['embed_dim']).to(device)
+    model = MLPProbe(encoder, cfg['model']['embed_dim']).to(device)
+    #model = LinearProbe(encoder, cfg['model']['embed_dim']).to(device)
 
     # 3. PREPARE DATASETS FROM SEPARATE FILES
     train_ds = QG_Dataset(cfg['finetune']['train_h5_path'])
