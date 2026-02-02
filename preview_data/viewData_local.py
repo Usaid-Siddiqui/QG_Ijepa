@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 import h5py
 import random
 
-file_path = "/Users/usaid/Desktop/qg_small.h5"
+file_path = "/Users/usaid/Stuff/ML/QG_ijepa/data/qg_small_train.h5"
 f = h5py.File(file_path, "r")
 # print(list(f.keys()))        # top-level groups
 X = f['images']
