@@ -119,9 +119,9 @@ def run_evaluation():
     plt.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--', label='Random')
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
-    plt.xlabel('False Positive Rate (Gluon Misidentification)')
-    plt.ylabel('True Positive Rate (Quark Efficiency)')
-    plt.title('Quark vs Gluon Discrimination Performance')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('ROC Performance')
     plt.legend(loc="lower right")
     plt.grid(alpha=0.3)
     
