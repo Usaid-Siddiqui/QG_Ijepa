@@ -33,6 +33,13 @@ class QG_Dataset(Dataset):
         
         # Convert to torch [C, H, W]
         x = torch.from_numpy(img).float()
+
+        # Normalization. Uses hardcoded values from full 100k training set
+        x = torch.log1p(x)
+        mean = torch.tensor([0.01122842, 0.01998984, 0.08350217])
+        std = torch.tensor([0.17538942, 0.21435375, 0.55736226])
+        x = (x - mean) / (std + 1e-6)
+
         if x.ndim == 3 and x.shape[2] <= 3: # If HWC
             x = x.permute(2, 0, 1)
     
