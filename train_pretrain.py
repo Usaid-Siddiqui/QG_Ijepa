@@ -105,7 +105,6 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
                 target_latents = torch.gather(target_encoder_out, 1, trg_idx_exp)
 
             # Student Forward (Encoder + Predictor)
-            # We now use the new model forward which passes ctx_idx to the predictor
             preds = model(patches, ctx_idx, trg_idx)
             
             # Apply LayerNorm to student predictions so they match the teacher's scale
