@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 # --- 1. THE EXACT I-JEPA COLLATOR LOGIC ---
 class QG_MaskCollator:
-    def __init__(self, grid_size=16, context_scale=(0.2, 0.4), target_scale=(0.15, 0.2), num_targets=4):
+    def __init__(self, grid_size=16, context_scale=(0.4, 0.6), target_scale=(0.1, 0.15), num_targets=4):
         self.grid_size = grid_size
         self.num_patches = grid_size ** 2
         self.context_scale = context_scale
@@ -87,9 +87,9 @@ def visualize_random(h5_path):
     # Try changing context_scale to (0.4, 0.6) to see "Hard Mode"
     collator = QG_MaskCollator(
         grid_size=16, 
-        context_scale=(0.2, 0.4), 
-        target_scale=(0.15, 0.2),
-        num_targets=4
+        context_scale=(0.3, 0.5), 
+        target_scale=(0.1, 0.12),
+        num_targets=2
     )
     ctx_mask, trg_mask = collator.generate_single_mask_pair()
     
