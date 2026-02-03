@@ -112,10 +112,15 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
             preds = F.layer_norm(preds, (preds.size(-1),))
 
             # SmoothL1 is less aggressive than MSE
-            loss = F.smooth_l1_loss(preds, target_latents, beta=1.0)
+            loss = F.smooth_l1_loss(preds, target_latents, beta=0.1)
 
         # --- SCALED BACKWARD PASS ---
         scaler.scale(loss).backward()
+        
+        # Gradient Clipping
+        scaler.unscale_(optimizer) 
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
         scaler.step(optimizer)
         scaler.update()
 
