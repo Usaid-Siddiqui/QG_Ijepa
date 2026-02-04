@@ -1,10 +1,11 @@
+# config.yaml
 data:
-  h5_path: "data/qg_medium_train.h5"
-  batch_size: 32
+  h5_path: "/shared/usiddiqui/IJEPA/data/qg_medium_train.h5"
+  batch_size: 256
   num_workers: 4
 
 model:
-  name: "vit_small" # Used for logging/checkpoint names
+  name: "vit_small_ijepa"
   patch_dim: 192
   embed_dim: 384
   depth: 12
@@ -13,17 +14,30 @@ model:
   predictor_depth: 6
 
 train:
-  base_lr: 0.0001
-  epochs: 100
-  warmup_epochs: 10
+  base_lr: 0.00005
+  epochs: 25
+  warmup_epochs: 8
   ema_momentum: 0.999
-  weight_decay: 0.05
+  weight_decay: 0.001
   save_freq: 5
-  checkpoint_dir: "checkpoints"
-  log_dir: "logs"
+  # Paths in Drive for persistent storage
+  checkpoint_dir: "/shared/usiddiqui/IJEPA/checkpoints"
+  log_dir: "../logs"
+
+  # Optional: Resume from a specific checkpoint
+  # resume_from: "/content/drive/MyDrive/QG_IJEPA/checkpoints/20260122_0154/checkpoint_epoch_8.pth"
 
 masking:
   grid_size: 16
-  num_targets: 4
-  target_size: [3, 5]
-  context_size: [8, 12]
+  num_targets: 2
+  target_scale: [0.1, 0.15]
+  context_scale: [0.5, 0.6]
+
+finetune:
+  checkpoint_to_load: "/shared/usiddiqui/IJEPA/checkpoints/vit_small_ijepa_20260203_040412/best_encoder.pth"
+  train_h5_path: "/shared/usiddiqui/IJEPA/data_uncompressed/qg_fast_finetune.h5"
+  test_h5_path: "/shared/usiddiqui/IJEPA/data_uncompressed/qg_medium_test.h5"
+  batch_size: 64
+  epochs: 5
+  lr: 0.001
+  freeze_encoder: True
