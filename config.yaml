@@ -1,6 +1,6 @@
 # config.yaml
 data:
-  h5_path: "/shared/usiddiqui/IJEPA/data/qg_medium_train.h5"
+  h5_path: "/shared/usiddiqui/IJEPA/data_uncompressed/qg_medium_train.h5"
   batch_size: 256
   num_workers: 4
 

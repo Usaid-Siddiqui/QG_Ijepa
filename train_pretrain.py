@@ -14,13 +14,13 @@ import shutil
 scaler = GradScaler('cuda')
 
 # LOAD CONFIGURATION
-cfg = load_config("colab_config.yaml")
+cfg = load_config("config.yaml")
 
 # INITIALIZE LOGGING
 logger, checkpoint_dir, device = init_experiment(cfg)
 
 # Save current config
-shutil.copy("colab_config.yaml", os.path.join(checkpoint_dir, "config_used.yaml"))
+shutil.copy("config.yaml", os.path.join(checkpoint_dir, "config_used.yaml"))
 logger.info(f"Config saved to {checkpoint_dir}")
 
 # SETUP DATA
