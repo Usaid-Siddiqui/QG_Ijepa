@@ -2,7 +2,7 @@
 data:
   h5_path: "/home/jovyan/data/qg_medium_train.h5"
   batch_size: 256
-  num_workers: 0
+  num_workers: 2
 
 model:
   name: "vit_small_ijepa"

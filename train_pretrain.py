@@ -9,6 +9,9 @@ from torch.amp import autocast, GradScaler
 import torch.nn.functional as F
 from tqdm import tqdm
 import shutil
+import torch.multiprocessing as mp
+
+mp.set_sharing_strategy("file_system")
 
 # Initialize Scaler
 scaler = GradScaler('cuda')
@@ -33,11 +36,13 @@ collator = QG_MaskCollator(
     num_targets=cfg['masking']['num_targets']
 )
 dataloader = torch.utils.data.DataLoader(
-    dataset, 
-    batch_size=cfg['data']['batch_size'], 
+    dataset,
+    batch_size=cfg['data']['batch_size'],
     shuffle=True,
     num_workers=cfg['data']['num_workers'],
-    pin_memory=False,
+    prefetch_factor=2,
+    persistent_workers=False,
+    pin_memory=True,
     collate_fn=collator
 )
 

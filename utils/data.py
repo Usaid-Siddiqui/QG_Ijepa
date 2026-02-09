@@ -7,46 +7,42 @@ from utils.misc import pad_to_128
 class QG_Dataset(Dataset):
     def __init__(self, h5_path, indices=None):
         self.h5_path = h5_path
-        self.h5 = h5py.File(h5_path, 'r')
-
-        # Lazy load data
-        self.data = self.h5['images']
-        self.meta = self.h5['meta']
+        self.h5 = None
+        self.data = None
+        self.meta = None
 
         if indices is None:
-            self.indices = np.arange(len(self.data))
+            self.indices = np.arange(self._get_length())
         else:
             self.indices = indices
-    
+
+    def _get_length(self):
+        with h5py.File(self.h5_path, 'r') as f:
+            return len(f['images'])
+
     def __len__(self):
         return len(self.indices)
-    
+
     def __getitem__(self, idx):
-        if self.h5 is None: # Open once per worker process
-            self.h5 = h5py.File(self.h5_path, 'r')
+        if self.h5 is None:   #happens once per worker
+            self.h5 = h5py.File(self.h5_path, 'r', swmr=True)
             self.data = self.h5['images']
             self.meta = self.h5['meta']
 
-        # Load as numpy first, then convert to tensor
         i = self.indices[idx]
-        img = self.data[i] 
-        
-        # Convert to torch [C, H, W]
-        x = torch.from_numpy(img).float()
+        img = self.data[i]
 
-        # Normalization. Uses hardcoded values from full 100k training set
+        x = torch.from_numpy(img).float()
         x = torch.log1p(x)
+
         mean = torch.tensor([0.01122842, 0.01998984, 0.08350217])
         std = torch.tensor([0.17538942, 0.21435375, 0.55736226])
         x = (x - mean) / (std + 1e-6)
 
-        if x.ndim == 3 and x.shape[2] <= 3: # If HWC
+        if x.ndim == 3 and x.shape[2] <= 3:
             x = x.permute(2, 0, 1)
-    
-        # Apply pad_to_128(x) here so the batching works seamlessly
-        x = pad_to_128(x)
 
-        # Load label (quark/gluon) from metadata
+        x = pad_to_128(x)
         y = int(self.meta[i, 2])
 
         return x, y
