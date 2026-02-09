@@ -11,6 +11,8 @@ from tqdm import tqdm
 import shutil
 import torch.multiprocessing as mp
 
+import os
+os.environ["PYTORCH_NO_SHARED_MEMORY"] = "1"
 mp.set_sharing_strategy("file_system")
 
 # Initialize Scaler
@@ -40,7 +42,6 @@ dataloader = torch.utils.data.DataLoader(
     batch_size=cfg['data']['batch_size'],
     shuffle=True,
     num_workers=cfg['data']['num_workers'],
-    prefetch_factor=2,
     persistent_workers=False,
     pin_memory=True,
     collate_fn=collator
