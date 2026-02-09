@@ -37,7 +37,7 @@ dataloader = torch.utils.data.DataLoader(
     batch_size=cfg['data']['batch_size'], 
     shuffle=True,
     num_workers=cfg['data']['num_workers'],
-    pin_memory=True,
+    pin_memory=False,
     collate_fn=collator
 )
 
@@ -68,6 +68,7 @@ if not resume_path:
     resume_path = os.path.join(cfg['train']['checkpoint_dir'], "latest_checkpoint.pth")
 
 start_epoch, best_loss = load_checkpoint(resume_path, model, optimizer, device)
+print("Starting training loop")
 
 # TRAINING LOOP
 for epoch in range(start_epoch, cfg['train']['epochs']):

@@ -1,8 +1,8 @@
 # config.yaml
 data:
-  h5_path: "/shared/usiddiqui/IJEPA/data_uncompressed/qg_medium_train.h5"
+  h5_path: "/home/jovyan/data/qg_medium_train.h5"
   batch_size: 256
-  num_workers: 4
+  num_workers: 0
 
 model:
   name: "vit_small_ijepa"
@@ -21,8 +21,8 @@ train:
   weight_decay: 0.001
   save_freq: 5
   # Paths in Drive for persistent storage
-  checkpoint_dir: "/shared/usiddiqui/IJEPA/checkpoints"
-  log_dir: "../logs"
+  checkpoint_dir: "/home/jovyan/shared/usiddiqui/IJEPA/checkpoints"
+  log_dir: "/home/jovyan/shared/usiddiqui/IJEPA/logs"
 
   # Optional: Resume from a specific checkpoint
   # resume_from: "/content/drive/MyDrive/QG_IJEPA/checkpoints/20260122_0154/checkpoint_epoch_8.pth"
@@ -35,7 +35,7 @@ masking:
 
 finetune:
   checkpoint_to_load: "/shared/usiddiqui/IJEPA/checkpoints/vit_small_ijepa_20260203_040412/best_encoder.pth"
-  train_h5_path: "/shared/usiddiqui/IJEPA/data_uncompressed/qg_fast_finetune.h5"
+  train_h5_path: "/home/jovyan/data/qg_medium_finetune.h5"
   test_h5_path: "/shared/usiddiqui/IJEPA/data_uncompressed/qg_medium_test.h5"
   batch_size: 64
   epochs: 5

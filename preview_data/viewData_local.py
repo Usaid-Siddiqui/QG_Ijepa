@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 import h5py
 import random
 
-file_path = "/Users/usaid/Stuff/ML/QG_ijepa/data/qg_small_train.h5"
+file_path = "/home/jovyan/shared/usiddiqui/data/data_uncompressed/qg_medium_train"
 f = h5py.File(file_path, "r")
 # print(list(f.keys()))        # top-level groups
 X = f['images']
@@ -33,10 +33,11 @@ print(y.shape)
 
 
 sample = X[:100]          # shape (100,125,125,3)
-
+'''
 for c in range(3):
     vals = sample[..., c].ravel()
     vals = vals[vals > 0]   # ignore zeros (important)
     plt.hist(vals, bins=100, log=True)
     plt.title(f"Channel {c}")
     plt.show()
+'''
