@@ -42,6 +42,7 @@ dataloader = torch.utils.data.DataLoader(
     batch_size=cfg['data']['batch_size'],
     shuffle=True,
     num_workers=cfg['data']['num_workers'],
+    prefetch_factor = cfg['data']['prefetch_factor'],
     persistent_workers=False,
     pin_memory=True,
     collate_fn=collator

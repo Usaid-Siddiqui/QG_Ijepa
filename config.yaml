@@ -2,7 +2,8 @@
 data:
   h5_path: "/home/jovyan/data/qg_medium_train.h5"
   batch_size: 256
-  num_workers: 2
+  num_workers: 1
+  prefetch_factor: 1
 
 model:
   name: "vit_small_ijepa"
@@ -14,7 +15,7 @@ model:
   predictor_depth: 6
 
 train:
-  base_lr: 0.00005
+  base_lr: 0.00004
   epochs: 25
   warmup_epochs: 8
   ema_momentum: 0.999
@@ -34,9 +35,10 @@ masking:
   context_scale: [0.5, 0.6]
 
 finetune:
-  checkpoint_to_load: "/shared/usiddiqui/IJEPA/checkpoints/vit_small_ijepa_20260203_040412/best_encoder.pth"
+  checkpoint_to_load: "/shared/usiddiqui/IJEPA/checkpoints/vit_small_ijepa_20260209_211920/best_encoder.pth"
+  finetune_dir: "/home/jovyan/shared/finetune"
   train_h5_path: "/home/jovyan/data/qg_medium_finetune.h5"
-  test_h5_path: "/shared/usiddiqui/IJEPA/data_uncompressed/qg_medium_test.h5"
+  test_h5_path: "/home/jovyan/data/qg_medium_test.h5"
   batch_size: 64
   epochs: 5
   lr: 0.001

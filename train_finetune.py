@@ -37,13 +37,13 @@ class MLPProbe(nn.Module):
 
 def run_evaluation():
     # 1. SETUP
-    cfg = load_config("colab_config.yaml")
+    cfg = load_config("config.yaml")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt_path = cfg['finetune']['checkpoint_to_load']
     
     # Define save paths immediately
     checkpoint_folder_name = os.path.basename(os.path.dirname(ckpt_path))
-    final_save_path = os.path.join("/content/drive/MyDrive/QG_IJEPA/finetune", checkpoint_folder_name)
+    final_save_path = os.path.join(cfg['finetune']['finetune_dir'], checkpoint_folder_name)
     os.makedirs(final_save_path, exist_ok=True)
 
     # 2. INITIALIZE MODEL
