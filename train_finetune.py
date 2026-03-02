@@ -13,30 +13,59 @@ from utils import QG_Dataset, load_config
 from models import VisionTransformer
 
 class MLPProbe(nn.Module):
-    def __init__(self, encoder, embed_dim):
+    def __init__(self, encoder, embed_dim, head_layers, pool_type="mean", freeze_encoder=True, unfreeze_last=0):
         super().__init__()
         self.encoder = encoder
-        # Strictly freeze the pre-trained weights
-        for param in self.encoder.parameters():
-            param.requires_grad = False
-        
-        # Non-linear head to improve AUC
-        self.head = nn.Sequential(
-            nn.Linear(embed_dim, 512),
-            nn.ReLU(),
-            nn.Dropout(0.1),
-            nn.Linear(512, 1)
-        )
-        
+
+        # control parameter freezing behaviour
+        if not freeze_encoder:
+            # leave every parameter trainable
+            for param in self.encoder.parameters():
+                param.requires_grad = True
+        elif unfreeze_last > 0:
+            # only unfreeze last few transformer blocks
+            for block in self.encoder.blocks[-unfreeze_last:]:
+                for param in block.parameters():
+                    param.requires_grad = True
+            # freeze everything else
+            for block in self.encoder.blocks[:-unfreeze_last]:
+                for param in block.parameters():
+                    param.requires_grad = False
+        else:
+            # freeze entire encoder
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+
+        self.pool_type = pool_type
+
+        # build the head from a list of hidden sizes; final output is scalar
+        layers = []
+        in_dim = embed_dim
+        for hid in head_layers:
+            layers.append(nn.Linear(in_dim, hid))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(0.1))
+            in_dim = hid
+        layers.append(nn.Linear(in_dim, 1))
+        self.head = nn.Sequential(*layers)
+
     def forward(self, x):
         x_patches = generate_patches(x, patch_size=8)
         with torch.no_grad():
-            features = self.encoder(x_patches)
-            global_feat = features.mean(dim=1) 
+            features = self.encoder(x_patches)  # [B, N, D]
+            if self.pool_type == "mean":
+                global_feat = features.mean(dim=1)
+            elif self.pool_type == "max":
+                global_feat, _ = features.max(dim=1)
+            elif self.pool_type == "cls":
+                # assume first token is CLS if used
+                global_feat = features[:, 0]
+            else:
+                raise ValueError(f"Unknown pool type {self.pool_type}")
         return self.head(global_feat)
 
 def run_evaluation():
-    # 1. SETUP
+    # setup
     cfg = load_config("config.yaml")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpt_path = cfg['finetune']['checkpoint_to_load']
@@ -46,7 +75,7 @@ def run_evaluation():
     final_save_path = os.path.join(cfg['finetune']['finetune_dir'], checkpoint_folder_name)
     os.makedirs(final_save_path, exist_ok=True)
 
-    # 2. INITIALIZE MODEL
+    # initialize model and load checkpoint
     encoder = VisionTransformer(
         patch_dim=cfg['model']['patch_dim'], 
         embed_dim=cfg['model']['embed_dim'], 
@@ -59,9 +88,23 @@ def run_evaluation():
         
     checkpoint = torch.load(ckpt_path, map_location=device)
     encoder.load_state_dict(checkpoint)
-    model = MLPProbe(encoder, cfg['model']['embed_dim']).to(device)
 
-    # 3. DATA
+    # configuration for probe head and training
+    head_layers = cfg['finetune'].get('head_layers', [512])
+    pool_type = cfg['finetune'].get('pool', 'mean')
+    freeze_encoder = cfg['finetune'].get('freeze_encoder', True)
+    unfreeze_last = cfg['finetune'].get('unfreeze_last', 0)
+
+    model = MLPProbe(
+        encoder,
+        cfg['model']['embed_dim'],
+        head_layers=head_layers,
+        pool_type=pool_type,
+        freeze_encoder=freeze_encoder,
+        unfreeze_last=unfreeze_last,
+    ).to(device)
+
+    # prepare data loaders
     train_loader = DataLoader(QG_Dataset(cfg['finetune']['train_h5_path']), 
                               batch_size=cfg['finetune']['batch_size'], shuffle=True, num_workers=2)
     test_loader = DataLoader(QG_Dataset(cfg['finetune']['test_h5_path']), 
@@ -70,8 +113,13 @@ def run_evaluation():
     optimizer = optim.AdamW(model.head.parameters(), lr=cfg['finetune']['lr'])
     criterion = nn.BCEWithLogitsLoss()
 
-    # 4. TRAINING LOOP WITH EMERGENCY SAVE
+    # training loop for head with interrupt handling
     print(f"--- Training MLP Head | Results path: {final_save_path} ---")
+    print("probe config:",
+          f"head={head_layers}",
+          f"pool={pool_type}",
+          f"freeze={freeze_encoder}",
+          f"unfreeze_last={unfreeze_last}")
     try:
         model.train()
         for epoch in range(cfg['finetune']['epochs']):
@@ -93,7 +141,7 @@ def run_evaluation():
     except KeyboardInterrupt:
         print("\n[!] User interrupted. Calculating metrics on partial training...")
 
-    # 5. FINAL EVALUATION
+    # evaluate on test set
     print("--- Computing Final ROC AUC ---")
     model.eval()
     all_probs, all_labels = [], []
@@ -107,7 +155,7 @@ def run_evaluation():
     auc = roc_auc_score(all_labels, all_probs)
     fpr, tpr, _ = roc_curve(all_labels, all_probs)
 
-    # 6. PLOT & SAVE (Order: Save then Show)
+    # plot ROC curve and save results
     plt.figure(figsize=(8, 6))
     plt.plot(fpr, tpr, color='blue', lw=2, label=f'MLP Probe (AUC = {auc:.4f})')
     plt.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--')
@@ -121,7 +169,7 @@ def run_evaluation():
     plt.savefig(os.path.join(final_save_path, "finetune_roc.png"), bbox_inches='tight')
     plt.show()
 
-    # 7. LOGGING & WEIGHTS
+    # log metrics and save head weights
     torch.save(model.head.state_dict(), os.path.join(final_save_path, "finetune_head.pth"))
     
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")

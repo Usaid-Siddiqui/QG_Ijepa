@@ -119,7 +119,7 @@ for epoch in range(start_epoch, cfg['train']['epochs']):
             preds = F.layer_norm(preds, (preds.size(-1),))
 
             # SmoothL1 is less aggressive than MSE
-            loss = F.smooth_l1_loss(preds, target_latents, beta=0.1)
+            loss = F.mse_loss(preds, target_latents)
 
         # --- SCALED BACKWARD PASS ---
         scaler.scale(loss).backward()
