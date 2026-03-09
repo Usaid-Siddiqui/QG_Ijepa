@@ -13,6 +13,8 @@ from utils import QG_Dataset, load_config
 from models import VisionTransformer
 import shutil
 
+torch.manual_seed(42)
+
 class MLPProbe(nn.Module):
     def __init__(self, encoder, embed_dim, head_layers, pool_type="mean", freeze_encoder=True, unfreeze_last=0):
         super().__init__()
