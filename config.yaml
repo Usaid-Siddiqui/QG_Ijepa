@@ -1,49 +1,45 @@
-# config.yaml
 data:
-  h5_path: "/home/jovyan/data/qg_medium_train.h5"
   batch_size: 256
+  h5_path: /home/jovyan/data/qg_medium_train.h5
   num_workers: 1
   prefetch_factor: 1
-
-model:
-  name: "vit_small_ijepa"
-  patch_dim: 192
-  embed_dim: 384
-  depth: 12
-  num_heads: 6
-  predictor_embed_dim: 192
-  predictor_depth: 6
-
-train:
-  base_lr: 0.00005
-  epochs: 25
-  warmup_epochs: 8
-  ema_momentum: 0.999
-  weight_decay: 0.001
-  save_freq: 5
-  # Paths in Drive for persistent storage
-  checkpoint_dir: "/home/jovyan/shared/usiddiqui/IJEPA/checkpoints"
-  log_dir: "/home/jovyan/shared/usiddiqui/IJEPA/logs"
-
-  # Optional: Resume from a specific checkpoint
-  # resume_from: "/content/drive/MyDrive/QG_IJEPA/checkpoints/20260122_0154/checkpoint_epoch_8.pth"
-
+finetune:
+  batch_size: 64
+  checkpoint_to_load: ''
+  data_fraction: 1.0
+  epochs: 5
+  finetune_dir: /shared/usiddiqui/IJEPA/finetune
+  freeze_encoder: false
+  head_layers:
+  - 512
+  lr: 0.001
+  pool: mean
+  test_h5_path: /home/jovyan/data/qg_medium_test.h5
+  train_h5_path: /home/jovyan/data/qg_medium_finetune.h5
+  unfreeze_last: 0
 masking:
+  context_scale:
+  - 0.5
+  - 0.6
   grid_size: 16
   num_targets: 2
-  target_scale: [0.1, 0.15]
-  context_scale: [0.5, 0.6]
-
-finetune:
-  checkpoint_to_load: "/shared/usiddiqui/IJEPA/checkpoints/vit_small_ijepa_20260209_211920/best_encoder.pth"
-  finetune_dir: "/shared/usiddiqui/IJEPA/finetune"
-  train_h5_path: "/home/jovyan/data/qg_medium_finetune.h5"
-  test_h5_path: "/home/jovyan/data/qg_medium_test.h5"
-  batch_size: 64
-  epochs: 5
-  lr: 0.001
-  freeze_encoder: True
-  head_layers: [512]      # hidden dims for MLP head
-  pool: "mean"            # one of mean, max, cls
-  unfreeze_last: 0        # how many encoder blocks to thaw
-  data_fraction: 1.0      # fraction of training data to use (for quick tests)
+  target_scale:
+  - 0.1
+  - 0.15
+model:
+  depth: 12
+  embed_dim: 384
+  name: vit_small_ijepa
+  num_heads: 6
+  patch_dim: 192
+  predictor_depth: 6
+  predictor_embed_dim: 192
+train:
+  base_lr: 5.0e-05
+  checkpoint_dir: /home/jovyan/shared/usiddiqui/IJEPA/checkpoints
+  ema_momentum: 0.999
+  epochs: 25
+  log_dir: /home/jovyan/shared/usiddiqui/IJEPA/logs
+  save_freq: 5
+  warmup_epochs: 8
+  weight_decay: 0.001

@@ -46,4 +46,4 @@ if __name__ == "__main__":
         
         # Call evaluation script as a separate process
         # This ensures CUDA memory is cleared between runs
-        subprocess.run(["python", "your_evaluation_script.py"])
+        subprocess.run(["python", "train_finetune.py"])
