@@ -11,6 +11,7 @@ from tqdm import tqdm
 from utils.misc import generate_patches
 from utils import QG_Dataset, load_config
 from models import VisionTransformer
+import shutil
 
 class MLPProbe(nn.Module):
     def __init__(self, encoder, embed_dim, head_layers, pool_type="mean", freeze_encoder=True, unfreeze_last=0):
@@ -171,6 +172,13 @@ def run_evaluation():
 
     # log metrics and save head weights
     torch.save(model.head.state_dict(), os.path.join(final_save_path, "finetune_head.pth"))
+
+    #log configs used for this specific run
+    try:
+        shutil.copy(cfg, os.path.join(final_save_path, "run_config.yaml"))
+        print(f"[*] Config backed up to {final_save_path}")
+    except Exception as e:
+        print(f"[!] Warning: Could not back up config: {e}")
     
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(os.path.join(final_save_path, "finetune_results.txt"), "a") as f:
