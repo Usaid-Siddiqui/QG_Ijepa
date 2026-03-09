@@ -6,14 +6,14 @@ import os
 experiments = [
     {
         "name": "JEPA_Linear_Probe_100pct",
-        "ckpt": "checkpoints/jepa_latest.pth", # Adjust to your actual path
+        "ckpt": "/shared/usiddiqui/IJEPA/checkpoints/vit_small_ijepa_20260209_211920/best_encoder.pth",
         "freeze": True,
         "data_fraction": 1.0,
         "lr": 0.001
     },
     {
         "name": "JEPA_Finetune_10pct",
-        "ckpt": "checkpoints/jepa_latest.pth",
+        "ckpt": "/shared/usiddiqui/IJEPA/checkpoints/vit_small_ijepa_20260209_211920/best_encoder.pth",
         "freeze": False,
         "data_fraction": 0.1,
         "lr": 0.0001 # Pretrained models need smaller LR
