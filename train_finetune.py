@@ -92,9 +92,11 @@ def run_evaluation():
         checkpoint = torch.load(ckpt_path, map_location=device)
         encoder.load_state_dict(checkpoint)
         run_type = "jepa"
+        display_name = os.path.basename(os.path.dirname(ckpt_path))
     else:
         print("[!] No valid checkpoint found. INITIALIZING FROM SCRATCH.")
         run_type = "scratch"
+        display_name = "from_scratch"
 
     head_layers = cfg['finetune'].get('head_layers', [512])
     pool_type = cfg['finetune'].get('pool', 'mean')
@@ -103,12 +105,12 @@ def run_evaluation():
     lr = cfg['finetune']['lr']
 
     # Handle Naming and Directories
-    mode = "frozen" if cfg['finetune'].get('freeze_encoder', True) else "full-ft"
-    if cfg['finetune'].get('unfreeze_last', 0) > 0:
-        mode = f"unfreeze-{cfg['finetune']['unfreeze_last']}"
+    mode = "frozen" if freeze_encoder else "full-ft"
+    if unfreeze_last > 0:
+        mode = f"unfreeze-{unfreeze_last}"
     
     # Simple, unique run ID
-    run_id = f"{timestamp}_{run_type}_{mode}_lr{cfg['finetune']['lr']}"
+    run_id = f"{timestamp}_{run_type}_{mode}_lr{lr}"
     final_save_path = os.path.join(cfg['finetune']['finetune_dir'], run_id)
     os.makedirs(final_save_path, exist_ok=True)
 
@@ -116,10 +118,10 @@ def run_evaluation():
     model = MLPProbe(
         encoder,
         cfg['model']['embed_dim'],
-        head_layers=cfg['finetune'].get('head_layers', [512]),
-        pool_type=cfg['finetune'].get('pool', 'mean'),
-        freeze_encoder=cfg['finetune'].get('freeze_encoder', True),
-        unfreeze_last=cfg['finetune'].get('unfreeze_last', 0),
+        head_layers=head_layers,
+        pool_type=pool_type,
+        freeze_encoder=freeze_encoder,
+        unfreeze_last=unfreeze_last,
     ).to(device)
 
     # 5. Data Loading with OPTIONAL Limiting
@@ -139,8 +141,8 @@ def run_evaluation():
     test_loader = DataLoader(test_ds, batch_size=cfg['finetune']['batch_size'], shuffle=False, num_workers=2)
 
     # 6. Optimizer (Optimize EVERYTHING if not frozen, else just head)
-    params_to_optimize = model.parameters() if not cfg['finetune'].get('freeze_encoder', True) else model.head.parameters()
-    optimizer = optim.AdamW(params_to_optimize, lr=cfg['finetune']['lr'])
+    params_to_optimize = model.parameters() if not freeze_encoder else model.head.parameters()
+    optimizer = optim.AdamW(params_to_optimize, lr=lr)
     criterion = nn.BCEWithLogitsLoss()
 
     # training loop for head with interrupt handling
@@ -191,7 +193,7 @@ def run_evaluation():
     plt.plot([0, 1], [0, 1], color='gray', lw=1, linestyle='--')
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title(f'ROC Performance: {checkpoint_folder_name}')
+    plt.title(f'ROC Performance: {display_name}')
     plt.legend(loc="lower right")
     plt.grid(alpha=0.3)
     
@@ -209,9 +211,9 @@ def run_evaluation():
     except Exception as e:
         print(f"[!] Warning: Could not back up config: {e}")
     
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    timestamp_log = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with open(os.path.join(final_save_path, "finetune_results.txt"), "a") as f:
-        f.write(f"[{timestamp}] AUC: {auc:.4f} | Epochs: {cfg['finetune']['epochs']} | LR: {cfg['finetune']['lr']}\n")
+        f.write(f"[{timestamp_log}] AUC: {auc:.4f} | Epochs: {cfg['finetune']['epochs']} | LR: {cfg['finetune']['lr']}\n")
 
     print(f"\nFinal AUC: {auc:.4f}")
     print(f"Results saved to: {final_save_path}")
