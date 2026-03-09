@@ -44,5 +44,6 @@ finetune:
   lr: 0.001
   freeze_encoder: True
   head_layers: [512]      # hidden dims for MLP head
-  pool: "mean"           # one of mean, max, cls
+  pool: "mean"            # one of mean, max, cls
   unfreeze_last: 0        # how many encoder blocks to thaw
+  data_fraction: 1.0      # fraction of training data to use (for quick tests)

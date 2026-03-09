@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score, roc_curve
 import numpy as np
@@ -14,6 +14,7 @@ from models import VisionTransformer
 import shutil
 
 torch.manual_seed(42)
+np.random.seed(42)
 
 class MLPProbe(nn.Module):
     def __init__(self, encoder, embed_dim, head_layers, pool_type="mean", freeze_encoder=True, unfreeze_last=0):
@@ -71,24 +72,13 @@ class MLPProbe(nn.Module):
         return self.head(global_feat)
 
 def run_evaluation():
-    # setup
     cfg = load_config("config.yaml")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ckpt_path = cfg['finetune']['checkpoint_to_load']
+    ckpt_path = cfg['finetune'].get('checkpoint_to_load', None)
     
-    # Define save paths immediately
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-    mode = "frozen" if cfg['finetune'].get('freeze_encoder', True) else "full-ft"
-    if cfg['finetune'].get('unfreeze_last', 0) > 0:
-        mode = f"unfreeze-{cfg['finetune']['unfreeze_last']}"
     
-    run_id = f"{timestamp}_{mode}"
-    
-    # Define and create save path
-    final_save_path = os.path.join(cfg['finetune']['finetune_dir'], run_id)
-    os.makedirs(final_save_path, exist_ok=True)
-
-    # initialize model and load checkpoint
+    # 1. Initialize Encoder
     encoder = VisionTransformer(
         patch_dim=cfg['model']['patch_dim'], 
         embed_dim=cfg['model']['embed_dim'], 
@@ -96,50 +86,55 @@ def run_evaluation():
         num_heads=cfg['model']['num_heads']
     ).to(device)
     
-    # If no checkpoint is found, training will be done from scratch
+    # 2. Logic to handle Scratch vs Pretrained
     if ckpt_path and os.path.exists(ckpt_path):
         print(f"[*] Loading I-JEPA weights from {ckpt_path}")
         checkpoint = torch.load(ckpt_path, map_location=device)
         encoder.load_state_dict(checkpoint)
-        is_scratch = False
+        run_type = "jepa"
     else:
-        print("[!] No checkpoint found. TRAINING FROM SCRATCH.")
-        is_scratch = True
+        print("[!] No valid checkpoint found. INITIALIZING FROM SCRATCH.")
+        run_type = "scratch"
 
-    # Adjust save path if training from scratch to avoid overwriting finetune results
-    if is_scratch:
-        run_id = f"{timestamp}_SCRATCH_lr{cfg['finetune']['lr']}"
-        final_save_path = os.path.join(cfg['finetune']['finetune_dir'], run_id)
-        os.makedirs(final_save_path, exist_ok=True)
+    # 3. Handle Naming and Directories
+    mode = "frozen" if cfg['finetune'].get('freeze_encoder', True) else "full-ft"
+    if cfg['finetune'].get('unfreeze_last', 0) > 0:
+        mode = f"unfreeze-{cfg['finetune']['unfreeze_last']}"
+    
+    # Simple, unique run ID
+    run_id = f"{timestamp}_{run_type}_{mode}_lr{cfg['finetune']['lr']}"
+    final_save_path = os.path.join(cfg['finetune']['finetune_dir'], run_id)
+    os.makedirs(final_save_path, exist_ok=True)
 
-    if not os.path.exists(ckpt_path):
-        raise FileNotFoundError(f"Checkpoint not found at {ckpt_path}")
-        
-    checkpoint = torch.load(ckpt_path, map_location=device)
-    encoder.load_state_dict(checkpoint)
-
-    # configuration for probe head and training
-    head_layers = cfg['finetune'].get('head_layers', [512])
-    pool_type = cfg['finetune'].get('pool', 'mean')
-    freeze_encoder = cfg['finetune'].get('freeze_encoder', True)
-    unfreeze_last = cfg['finetune'].get('unfreeze_last', 0)
-
+    # 4. Setup Model with Probe Head
     model = MLPProbe(
         encoder,
         cfg['model']['embed_dim'],
-        head_layers=head_layers,
-        pool_type=pool_type,
-        freeze_encoder=freeze_encoder,
-        unfreeze_last=unfreeze_last,
+        head_layers=cfg['finetune'].get('head_layers', [512]),
+        pool_type=cfg['finetune'].get('pool', 'mean'),
+        freeze_encoder=cfg['finetune'].get('freeze_encoder', True),
+        unfreeze_last=cfg['finetune'].get('unfreeze_last', 0),
     ).to(device)
 
-    # prepare data loaders
-    train_loader = DataLoader(QG_Dataset(cfg['finetune']['train_h5_path']), 
-                              batch_size=cfg['finetune']['batch_size'], shuffle=True, num_workers=2)
-    test_loader = DataLoader(QG_Dataset(cfg['finetune']['test_h5_path']), 
-                             batch_size=cfg['finetune']['batch_size'], shuffle=False, num_workers=2)
+    # 5. Data Loading with OPTIONAL Limiting
+    full_train_ds = QG_Dataset(cfg['finetune']['train_h5_path'])
+    test_ds = QG_Dataset(cfg['finetune']['test_h5_path'])
+    
+    data_fraction = cfg['finetune'].get('data_fraction', 1.0)
+    if data_fraction < 1.0:
+        num_samples = int(len(full_train_ds) * data_fraction)
+        indices = np.random.choice(len(full_train_ds), num_samples, replace=False)
+        train_ds = Subset(full_train_ds, indices)
+        print(f"[*] Data Limiting: Using {num_samples} samples ({data_fraction*100}%)")
+    else:
+        train_ds = full_train_ds
 
-    optimizer = optim.AdamW(model.head.parameters(), lr=cfg['finetune']['lr'])
+    train_loader = DataLoader(train_ds, batch_size=cfg['finetune']['batch_size'], shuffle=True, num_workers=2)
+    test_loader = DataLoader(test_ds, batch_size=cfg['finetune']['batch_size'], shuffle=False, num_workers=2)
+
+    # 6. Optimizer (Optimize EVERYTHING if not frozen, else just head)
+    params_to_optimize = model.parameters() if not cfg['finetune'].get('freeze_encoder', True) else model.head.parameters()
+    optimizer = optim.AdamW(params_to_optimize, lr=cfg['finetune']['lr'])
     criterion = nn.BCEWithLogitsLoss()
 
     # training loop for head with interrupt handling
