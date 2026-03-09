@@ -1,25 +1,29 @@
 import yaml
 import subprocess
+import os
 
 # Define experimental matrix
 experiments = [
     {
-        "name": "I-JEPA_Linear_Probe",
-        "ckpt": "checkpoints/jepa_latest.pth",
+        "name": "JEPA_Linear_Probe_100pct",
+        "ckpt": "checkpoints/jepa_latest.pth", # Adjust to your actual path
         "freeze": True,
-        "lr": 1e-3
+        "data_fraction": 1.0,
+        "lr": 0.001
     },
     {
-        "name": "I-JEPA_Full_Finetune",
+        "name": "JEPA_Finetune_10pct",
         "ckpt": "checkpoints/jepa_latest.pth",
         "freeze": False,
-        "lr": 1e-5
+        "data_fraction": 0.1,
+        "lr": 0.0001 # Pretrained models need smaller LR
     },
     {
-        "name": "From_Scratch_Baseline",
-        "ckpt": "",  # Empty string triggers your 'scratch' logic
+        "name": "Scratch_10pct",
+        "ckpt": "", # Empty string triggers the 'scratch' logic
         "freeze": False,
-        "lr": 1e-3
+        "data_fraction": 0.1,
+        "lr": 0.001 # Scratch needs a higher LR to learn from zero
     }
 ]
 
