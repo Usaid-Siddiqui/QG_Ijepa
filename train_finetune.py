@@ -52,17 +52,20 @@ class MLPProbe(nn.Module):
 
     def forward(self, x):
         x_patches = generate_patches(x, patch_size=8)
-        with torch.no_grad():
-            features = self.encoder(x_patches)  # [B, N, D]
-            if self.pool_type == "mean":
-                global_feat = features.mean(dim=1)
-            elif self.pool_type == "max":
-                global_feat, _ = features.max(dim=1)
-            elif self.pool_type == "cls":
-                # assume first token is CLS if used
-                global_feat = features[:, 0]
-            else:
-                raise ValueError(f"Unknown pool type {self.pool_type}")
+        if not any(p.requires_grad for p in self.encoder.parameters()):
+            with torch.no_grad():
+                features = self.encoder(x_patches)
+        else:
+            features = self.encoder(x_patches)
+        if self.pool_type == "mean":
+            global_feat = features.mean(dim=1)
+        elif self.pool_type == "max":
+            global_feat, _ = features.max(dim=1)
+        elif self.pool_type == "cls":
+            # assume first token is CLS if used
+            global_feat = features[:, 0]
+        else:
+            raise ValueError(f"Unknown pool type {self.pool_type}")
         return self.head(global_feat)
 
 def run_evaluation():
@@ -72,8 +75,15 @@ def run_evaluation():
     ckpt_path = cfg['finetune']['checkpoint_to_load']
     
     # Define save paths immediately
-    checkpoint_folder_name = os.path.basename(os.path.dirname(ckpt_path))
-    final_save_path = os.path.join(cfg['finetune']['finetune_dir'], checkpoint_folder_name)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+    mode = "frozen" if cfg['finetune'].get('freeze_encoder', True) else "full-ft"
+    if cfg['finetune'].get('unfreeze_last', 0) > 0:
+        mode = f"unfreeze-{cfg['finetune']['unfreeze_last']}"
+    
+    run_id = f"{timestamp}_{mode}"
+    
+    # Define and create save path
+    final_save_path = os.path.join(cfg['finetune']['finetune_dir'], run_id)
     os.makedirs(final_save_path, exist_ok=True)
 
     # initialize model and load checkpoint
@@ -84,6 +94,22 @@ def run_evaluation():
         num_heads=cfg['model']['num_heads']
     ).to(device)
     
+    # If no checkpoint is found, training will be done from scratch
+    if ckpt_path and os.path.exists(ckpt_path):
+        print(f"[*] Loading I-JEPA weights from {ckpt_path}")
+        checkpoint = torch.load(ckpt_path, map_location=device)
+        encoder.load_state_dict(checkpoint)
+        is_scratch = False
+    else:
+        print("[!] No checkpoint found. TRAINING FROM SCRATCH.")
+        is_scratch = True
+
+    # Adjust save path if training from scratch to avoid overwriting finetune results
+    if is_scratch:
+        run_id = f"{timestamp}_SCRATCH_lr{cfg['finetune']['lr']}"
+        final_save_path = os.path.join(cfg['finetune']['finetune_dir'], run_id)
+        os.makedirs(final_save_path, exist_ok=True)
+
     if not os.path.exists(ckpt_path):
         raise FileNotFoundError(f"Checkpoint not found at {ckpt_path}")
         
@@ -173,9 +199,9 @@ def run_evaluation():
     # log metrics and save head weights
     torch.save(model.head.state_dict(), os.path.join(final_save_path, "finetune_head.pth"))
 
-    #log configs used for this specific run
+    # log configs used for this specific run
     try:
-        shutil.copy(cfg, os.path.join(final_save_path, "run_config.yaml"))
+        shutil.copy("config.yaml", os.path.join(final_save_path, "run_config.yaml"))
         print(f"[*] Config backed up to {final_save_path}")
     except Exception as e:
         print(f"[!] Warning: Could not back up config: {e}")
