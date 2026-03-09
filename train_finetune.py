@@ -78,7 +78,7 @@ def run_evaluation():
     
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
     
-    # 1. Initialize Encoder
+    # Initialize Encoder
     encoder = VisionTransformer(
         patch_dim=cfg['model']['patch_dim'], 
         embed_dim=cfg['model']['embed_dim'], 
@@ -86,7 +86,7 @@ def run_evaluation():
         num_heads=cfg['model']['num_heads']
     ).to(device)
     
-    # 2. Logic to handle Scratch vs Pretrained
+    # Logic to handle Scratch vs Pretrained
     if ckpt_path and os.path.exists(ckpt_path):
         print(f"[*] Loading I-JEPA weights from {ckpt_path}")
         checkpoint = torch.load(ckpt_path, map_location=device)
@@ -96,7 +96,13 @@ def run_evaluation():
         print("[!] No valid checkpoint found. INITIALIZING FROM SCRATCH.")
         run_type = "scratch"
 
-    # 3. Handle Naming and Directories
+    head_layers = cfg['finetune'].get('head_layers', [512])
+    pool_type = cfg['finetune'].get('pool', 'mean')
+    freeze_encoder = cfg['finetune'].get('freeze_encoder', True)
+    unfreeze_last = cfg['finetune'].get('unfreeze_last', 0)
+    lr = cfg['finetune']['lr']
+
+    # Handle Naming and Directories
     mode = "frozen" if cfg['finetune'].get('freeze_encoder', True) else "full-ft"
     if cfg['finetune'].get('unfreeze_last', 0) > 0:
         mode = f"unfreeze-{cfg['finetune']['unfreeze_last']}"
