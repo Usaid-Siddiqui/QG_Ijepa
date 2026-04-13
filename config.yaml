@@ -41,14 +41,16 @@ vit_comparison:
   results_dir: /shared/usiddiqui/IJEPA/vit_comparison
   epochs: 20
   lr: 1.0e-04
+  encoder_lr_scale: 0.1
   warmup_epochs: 5
-  weight_decay: 1.0e-04
+  weight_decay: 1.0e-02
   batch_size: 64
   head_layers:
   - 512
   - 256
   pool: mean
   dropout: 0.1
+  label_smoothing: 0.1
   use_amp: true
   grad_clip: 1.0
 train:
