@@ -34,6 +34,23 @@ model:
   patch_dim: 192
   predictor_depth: 6
   predictor_embed_dim: 192
+vit_comparison:
+  best_encoder_path: ''   # set to your best_encoder.pth path from pretraining
+  train_h5_path: /home/jovyan/data/qg_medium_finetune.h5
+  test_h5_path: /home/jovyan/data/qg_medium_test.h5
+  results_dir: /shared/usiddiqui/IJEPA/vit_comparison
+  epochs: 20
+  lr: 1.0e-04
+  warmup_epochs: 5
+  weight_decay: 1.0e-04
+  batch_size: 64
+  head_layers:
+  - 512
+  - 256
+  pool: mean
+  dropout: 0.1
+  use_amp: true
+  grad_clip: 1.0
 train:
   base_lr: 5.0e-05
   checkpoint_dir: /home/jovyan/shared/usiddiqui/IJEPA/checkpoints
