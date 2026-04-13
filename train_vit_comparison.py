@@ -38,7 +38,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score, roc_curve
 import numpy as np
@@ -352,6 +352,7 @@ def run_comparison():
         'label_smoothing':   vc.get('label_smoothing',  0.1),
         'use_amp':           vc.get('use_amp',          True),
         'grad_clip':         vc.get('grad_clip',        1.0),
+        'data_fraction':     vc.get('data_fraction',    1.0),
     }
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
@@ -365,8 +366,19 @@ def run_comparison():
         print(f"[!] Could not back up config: {e}")
 
     # Shared data loaders
-    train_ds = QG_Dataset(run_cfg['train_h5_path'])
-    test_ds  = QG_Dataset(run_cfg['test_h5_path'])
+    full_train_ds = QG_Dataset(run_cfg['train_h5_path'])
+    test_ds       = QG_Dataset(run_cfg['test_h5_path'])
+
+    data_fraction = run_cfg['data_fraction']
+    if data_fraction < 1.0:
+        num_samples = max(1, int(len(full_train_ds) * data_fraction))
+        indices = np.random.choice(len(full_train_ds), num_samples, replace=False)
+        train_ds = Subset(full_train_ds, indices)
+        print(f"Data limiting: using {num_samples} / {len(full_train_ds)} samples "
+              f"({data_fraction*100:.1f}%)")
+    else:
+        train_ds = full_train_ds
+
     train_loader = DataLoader(train_ds, batch_size=run_cfg['batch_size'],
                               shuffle=True,  num_workers=2, pin_memory=True)
     test_loader  = DataLoader(test_ds,  batch_size=run_cfg['batch_size'],
@@ -468,6 +480,8 @@ def run_comparison():
         f.write(f"Label smoothing  : {run_cfg['label_smoothing']}\n")
         f.write(f"Head layers      : {run_cfg['head_layers']}\n")
         f.write(f"Pool             : {run_cfg['pool']}\n")
+        f.write(f"Data fraction    : {run_cfg['data_fraction']} "
+                f"({int(len(train_ds))} samples)\n")
         f.write(f"\nPretrained AUC   : {auc_pre:.4f}\n")
         f.write(f"Scratch AUC      : {auc_scr:.4f}\n")
         f.write(f"Delta            : {delta:+.4f}\n")
