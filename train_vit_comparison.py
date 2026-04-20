@@ -45,6 +45,7 @@ import numpy as np
 import os
 import datetime
 import shutil
+import time
 
 from utils.misc import generate_patches, load_config
 from utils.optim import adjust_learning_rate
@@ -262,20 +263,23 @@ def run_single(label: str, encoder_path, cfg_model, cfg_run, train_loader,
     smoothing = cfg_run['label_smoothing']
 
     best_auc = 0.0
-    history  = {"train_loss": [], "train_acc": [], "val_auc": []}
+    history  = {"train_loss": [], "train_acc": [], "val_auc": [], "epoch_time_s": []}
 
     try:
         for epoch in range(epochs):
+            t0 = time.perf_counter()
             head_lr = adjust_lr_differential(
                 optimizer, epoch, warmup, epochs, cfg_run['lr'], cfg_run['encoder_lr_scale']
             )
             loss, acc = train_one_epoch(model, train_loader, optimizer,
                                         device, scaler, grad_clip, smoothing)
             auc, _, _, _, _ = evaluate(model, test_loader, device)
+            epoch_time = time.perf_counter() - t0
 
             history["train_loss"].append(loss)
             history["train_acc"].append(acc)
             history["val_auc"].append(auc)
+            history["epoch_time_s"].append(epoch_time)
 
             is_best = auc > best_auc
             if is_best:
@@ -285,7 +289,7 @@ def run_single(label: str, encoder_path, cfg_model, cfg_run, train_loader,
 
             print(f"[{label}] Epoch {epoch+1:>3}/{epochs} | "
                   f"LR(head) {head_lr:.2e} | Loss {loss:.4f} | "
-                  f"Acc {acc:.4f} | AUC {auc:.4f}"
+                  f"Acc {acc:.4f} | AUC {auc:.4f} | {epoch_time:.1f}s"
                   + (" *" if is_best else ""))
 
     except KeyboardInterrupt:
@@ -298,27 +302,32 @@ def run_single(label: str, encoder_path, cfg_model, cfg_run, train_loader,
         print(f"[{label}] Restored best checkpoint (AUC {best_auc:.4f}) for final eval")
 
     final_auc, fpr, tpr, _, _ = evaluate(model, test_loader, device)
-    print(f"[{label}] Final AUC: {final_auc:.4f}")
+    total_ft_time = sum(history["epoch_time_s"])
+    print(f"[{label}] Final AUC: {final_auc:.4f} | "
+          f"Total finetune time: {total_ft_time/60:.1f} min")
 
     # Per-run results file
     with open(os.path.join(save_dir, f"{label}_results.txt"), "w") as f:
-        f.write(f"Label:            {label}\n")
-        f.write(f"Encoder path:     {encoder_path}\n")
-        f.write(f"Best AUC:         {best_auc:.4f}\n")
-        f.write(f"Final AUC:        {final_auc:.4f}\n")
-        f.write(f"Epochs:           {epochs}\n")
-        f.write(f"Head LR:          {cfg_run['lr']}\n")
-        f.write(f"Encoder LR scale: {cfg_run['encoder_lr_scale']}\n")
-        f.write(f"Weight decay:     {cfg_run['weight_decay']}\n")
-        f.write(f"Label smoothing:  {smoothing}\n")
-        f.write(f"Warmup epochs:    {warmup}\n")
-        f.write(f"Head layers:      {cfg_run['head_layers']}\n")
-        f.write(f"Pool:             {cfg_run['pool']}\n\n")
-        for i, (tl, ta, va) in enumerate(
-                zip(history["train_loss"], history["train_acc"], history["val_auc"])):
-            f.write(f"  Epoch {i+1:>3}: loss={tl:.4f}  acc={ta:.4f}  auc={va:.4f}\n")
+        f.write(f"Label:               {label}\n")
+        f.write(f"Encoder path:        {encoder_path}\n")
+        f.write(f"Best AUC:            {best_auc:.4f}\n")
+        f.write(f"Final AUC:           {final_auc:.4f}\n")
+        f.write(f"Total finetune time: {total_ft_time/60:.2f} min\n")
+        f.write(f"Epochs:              {epochs}\n")
+        f.write(f"Head LR:             {cfg_run['lr']}\n")
+        f.write(f"Encoder LR scale:    {cfg_run['encoder_lr_scale']}\n")
+        f.write(f"Weight decay:        {cfg_run['weight_decay']}\n")
+        f.write(f"Label smoothing:     {smoothing}\n")
+        f.write(f"Warmup epochs:       {warmup}\n")
+        f.write(f"Head layers:         {cfg_run['head_layers']}\n")
+        f.write(f"Pool:                {cfg_run['pool']}\n\n")
+        for i, (tl, ta, va, et) in enumerate(
+                zip(history["train_loss"], history["train_acc"],
+                    history["val_auc"], history["epoch_time_s"])):
+            f.write(f"  Epoch {i+1:>3}: loss={tl:.4f}  acc={ta:.4f}  "
+                    f"auc={va:.4f}  time={et:.1f}s\n")
 
-    return final_auc, fpr, tpr, history
+    return final_auc, fpr, tpr, history, total_ft_time
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +362,7 @@ def run_comparison():
         'use_amp':           vc.get('use_amp',          True),
         'grad_clip':         vc.get('grad_clip',        1.0),
         'data_fraction':     vc.get('data_fraction',    1.0),
+        'pretrain_time_min': vc.get('pretrain_time_min', None),  # wall-clock pretraining time
     }
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
@@ -394,7 +404,7 @@ def run_comparison():
     print("\n" + "="*60)
     print("RUN 1: Full ViT fine-tuning with PRETRAINED encoder")
     print("="*60)
-    auc_pre, fpr_pre, tpr_pre, hist_pre = run_single(
+    auc_pre, fpr_pre, tpr_pre, hist_pre, ft_time_pre = run_single(
         label="Pretrained",
         encoder_path=encoder_path,
         cfg_model=cfg_model,
@@ -411,7 +421,7 @@ def run_comparison():
     print("\n" + "="*60)
     print("RUN 2: Full ViT fine-tuning FROM SCRATCH")
     print("="*60)
-    auc_scr, fpr_scr, tpr_scr, hist_scr = run_single(
+    auc_scr, fpr_scr, tpr_scr, hist_scr, ft_time_scr = run_single(
         label="Scratch",
         encoder_path=None,
         cfg_model=cfg_model,
@@ -423,11 +433,32 @@ def run_comparison():
     )
 
     # -----------------------------------------------------------------------
-    # Plots
+    # Compute cumulative wall-clock time axes
     # -----------------------------------------------------------------------
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    pretrain_time_min = run_cfg['pretrain_time_min']
 
-    # ROC curves
+    # Cumulative finetune time in minutes
+    cum_time_pre = np.cumsum(hist_pre['epoch_time_s']) / 60.0
+    cum_time_scr = np.cumsum(hist_scr['epoch_time_s']) / 60.0
+
+    # For the pretrained run, offset by pretraining time if provided
+    if pretrain_time_min is not None:
+        cum_time_pre_total = cum_time_pre + pretrain_time_min
+        has_pretrain_time = True
+        print(f"\nPretraining time offset: {pretrain_time_min:.1f} min")
+    else:
+        cum_time_pre_total = cum_time_pre
+        has_pretrain_time = False
+        print("\n[!] pretrain_time_min not set in config — compute plot shows "
+              "finetune time only (no pretraining offset for pretrained run).")
+
+    # -----------------------------------------------------------------------
+    # Plots — 3 panels if pretrain time known, 2 otherwise
+    # -----------------------------------------------------------------------
+    ncols = 3 if has_pretrain_time else 2
+    fig, axes = plt.subplots(1, ncols, figsize=(7 * ncols, 5))
+
+    # Panel 1: ROC curves
     ax = axes[0]
     ax.plot(fpr_pre, tpr_pre, color='steelblue', lw=2,
             label=f'Pretrained (AUC = {auc_pre:.4f})')
@@ -440,7 +471,7 @@ def run_comparison():
     ax.legend(loc='lower right')
     ax.grid(alpha=0.3)
 
-    # AUC per epoch
+    # Panel 2: AUC vs epoch
     ax = axes[1]
     ax.plot(range(1, len(hist_pre['val_auc']) + 1), hist_pre['val_auc'],
             color='steelblue', lw=2, marker='o', markersize=4, label='Pretrained')
@@ -451,6 +482,24 @@ def run_comparison():
     ax.set_title('AUC vs. Epoch')
     ax.legend()
     ax.grid(alpha=0.3)
+
+    # Panel 3: AUC vs cumulative wall-clock time (compute efficiency)
+    if has_pretrain_time:
+        ax = axes[2]
+        ax.plot(cum_time_pre_total, hist_pre['val_auc'],
+                color='steelblue', lw=2, marker='o', markersize=4,
+                label=f'Pretrained (pretrain={pretrain_time_min:.0f}min + finetune)')
+        ax.plot(cum_time_scr, hist_scr['val_auc'],
+                color='tomato',    lw=2, marker='s', markersize=4,
+                label='Scratch (finetune only)')
+        # Mark where pretrained finetune begins
+        ax.axvline(x=pretrain_time_min, color='steelblue', lw=1,
+                   linestyle=':', alpha=0.6, label='Finetune start (pretrained)')
+        ax.set_xlabel('Cumulative wall-clock time (min)')
+        ax.set_ylabel('Validation AUC')
+        ax.set_title('Compute Efficiency: AUC vs. Total Time')
+        ax.legend(fontsize=8)
+        ax.grid(alpha=0.3)
 
     plt.tight_layout()
     plot_path = os.path.join(save_dir, "comparison_roc.png")
@@ -485,6 +534,14 @@ def run_comparison():
         f.write(f"\nPretrained AUC   : {auc_pre:.4f}\n")
         f.write(f"Scratch AUC      : {auc_scr:.4f}\n")
         f.write(f"Delta            : {delta:+.4f}\n")
+        f.write(f"\n--- Timing ---\n")
+        f.write(f"Pretrain time    : {pretrain_time_min if pretrain_time_min else 'not set'} min\n")
+        f.write(f"Finetune time (pretrained): {ft_time_pre/60:.2f} min\n")
+        f.write(f"Finetune time (scratch)   : {ft_time_scr/60:.2f} min\n")
+        if pretrain_time_min:
+            total_pre = pretrain_time_min + ft_time_pre / 60
+            f.write(f"Total compute (pretrained): {total_pre:.2f} min\n")
+            f.write(f"Total compute (scratch)   : {ft_time_scr/60:.2f} min\n")
 
 
 if __name__ == "__main__":

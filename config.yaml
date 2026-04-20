@@ -54,6 +54,7 @@ vit_comparison:
   label_smoothing: 0.1
   use_amp: true
   grad_clip: 1.0
+  pretrain_time_min:    # set to wall-clock pretraining time in minutes, e.g. 142.5
 train:
   base_lr: 5.0e-05
   checkpoint_dir: /home/jovyan/shared/usiddiqui/IJEPA/checkpoints
