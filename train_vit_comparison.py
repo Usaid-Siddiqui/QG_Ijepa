@@ -389,10 +389,11 @@ def run_comparison():
     else:
         train_ds = full_train_ds
 
+    pin = device.type == "cuda"
     train_loader = DataLoader(train_ds, batch_size=run_cfg['batch_size'],
-                              shuffle=True,  num_workers=2, pin_memory=True)
+                              shuffle=True,  num_workers=2, pin_memory=pin)
     test_loader  = DataLoader(test_ds,  batch_size=run_cfg['batch_size'],
-                              shuffle=False, num_workers=2, pin_memory=True)
+                              shuffle=False, num_workers=2, pin_memory=pin)
     print(f"Train samples: {len(train_ds)} | Test samples: {len(test_ds)}")
 
     cfg_model    = cfg['model']
